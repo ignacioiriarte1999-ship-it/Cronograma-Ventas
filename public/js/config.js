@@ -2,11 +2,14 @@
 //  CONFIGURACIÓN GLOBAL
 // ============================================================
 
-// La URL y la anon key son públicas por diseño: identifican al proyecto y no
-// autorizan nada por sí solas. Quién puede leer y escribir cada tabla lo
-// deciden las policies RLS (ver supabase/schema.sql).
-export const SUPABASE_URL = 'PEGAR_AQUI_LA_URL';
-export const SUPABASE_ANON_KEY = 'PEGAR_AQUI_LA_ANON_KEY';
+// La URL y la clave publishable son públicas por diseño: identifican al
+// proyecto y no autorizan nada por sí solas. Quién puede leer y escribir cada
+// tabla lo deciden las policies RLS (ver supabase/schema.sql).
+//
+// Acá va SIEMPRE la clave `sb_publishable_...`, nunca la `service_role`:
+// esa última saltea todas las policies y no debe salir del panel de Supabase.
+export const SUPABASE_URL = 'https://thgecpbmvjhtnfoosllz.supabase.co';
+export const SUPABASE_ANON_KEY = 'sb_publishable_7v-ndT65JyD3n0vh-4LBEw_IvLfyAOC';
 
 // Supabase Auth necesita un email. Los vendedores no tienen casilla
 // corporativa, así que se construye una sintética: ortiz@cronograma.local

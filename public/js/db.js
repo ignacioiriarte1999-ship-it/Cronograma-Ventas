@@ -1,7 +1,7 @@
 // ============================================================
 //  CLIENTE DE SUPABASE
 // ============================================================
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.58.0';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
 
 if (SUPABASE_URL.startsWith('PEGAR')) {
