@@ -30,11 +30,20 @@ idempotente: se puede volver a correr sin romper nada.
 
 ### 3. Desactivar la confirmación por email
 
-**Authentication → Providers → Email** → desactivar **"Confirm email"**.
+**Authentication → Providers → Email**. Ahí hay dos interruptores, uno dentro
+del otro, y hay que dejarlos así:
 
-Los vendedores no tienen casilla corporativa, así que la app les arma un email
-sintético (`ortiz@cronograma.local`). Si Supabase espera una confirmación, ese
-mail no llega a ningún lado y nadie puede entrar.
+| Interruptor | Estado |
+|---|---|
+| **Enable Email provider** (el de arriba) | **encendido** |
+| **Confirm email** (el de adentro) | **apagado** |
+
+Es fácil confundirlos. Si apagás el de arriba, el login devuelve
+`email_provider_disabled — Email logins are disabled` y no entra nadie.
+
+La confirmación va apagada porque los vendedores no tienen casilla
+corporativa: la app les arma un email sintético (`ortiz@cronograma.local`) y
+el mail de confirmación no llegaría a ningún lado.
 
 ### 4. Configurar la app
 

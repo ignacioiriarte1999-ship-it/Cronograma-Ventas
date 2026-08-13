@@ -70,6 +70,7 @@ export function observarSesion(callback) {
 const MENSAJES = {
   invalid_credentials: 'Usuario o contraseña incorrectos.',
   email_not_confirmed: 'Falta desactivar "Confirm email" en Authentication → Providers → Email.',
+  email_provider_disabled: 'El proveedor Email está apagado. Encendé "Enable Email provider" en Authentication → Providers → Email (y dejá "Confirm email" desactivado).',
   user_already_exists: 'Ese usuario ya existe.',
   weak_password: `La contraseña debe tener al menos ${MIN_PASS} caracteres.`,
   over_request_rate_limit: 'Demasiados intentos. Esperá unos minutos.',
