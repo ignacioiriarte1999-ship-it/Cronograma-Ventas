@@ -1,7 +1,7 @@
 // ============================================================
 //  ARRANQUE Y CABLEADO DE LA INTERFAZ
 // ============================================================
-import { vigilarConexion } from './firebase.js';
+import { vigilarConexion } from './db.js';
 import {
   observarSesion, login, logout, getSession, esAdmin, traducirError,
   cambiarPassword, listarUsuarios, crearPadronFaltante,
@@ -16,12 +16,15 @@ import {
 
 const $ = (id) => document.getElementById(id);
 let tabActual = null;
+let cargado = false;
 
 // ------------------------------------------------------------
 //  SESIÓN
 // ------------------------------------------------------------
 observarSesion((sess, aviso) => {
   if (!sess) {
+    cargado = false;
+    for (const mod of listaModulos()) mod.desuscribir();
     mostrarLogin(aviso);
     return;
   }
@@ -32,7 +35,7 @@ function mostrarLogin(aviso) {
   $('login-screen').style.display = 'flex';
   $('app-shell').style.display = 'none';
   $('pass-gate').style.display = 'none';
-  if (aviso) $('li-err').textContent = aviso;
+  $('li-err').textContent = aviso || '';
   $('li-pass').value = '';
 }
 
@@ -56,36 +59,42 @@ async function hacerLogin() {
   }
 }
 
-function iniciarApp(sess) {
+async function iniciarApp(sess) {
   $('login-screen').style.display = 'none';
 
-  // Primer ingreso: no se entra sin cambiar la contraseña provista por el admin.
-  if (!sess.passChanged) {
+  // Primer ingreso: no se entra sin cambiar la contraseña que dio el admin.
+  if (!sess.passCambiada) {
     $('app-shell').style.display = 'none';
     $('pass-gate').style.display = 'flex';
     return;
   }
   $('pass-gate').style.display = 'none';
   $('app-shell').style.display = 'block';
+  $('user-info').textContent = sess.user + (sess.vendedor ? ` (${sess.vendedor})` : '') + ` — ${sess.rol}`;
 
-  $('user-info').textContent = sess.user + (sess.vendedor ? ` (${sess.vendedor})` : '') + ` — ${sess.role}`;
-
-  for (const mod of listaModulos()) {
-    mod.onCambio = alCambiarModulo;
-    mod.cargarCache();
-    mod.suscribir();
-  }
+  if (cargado) return;
+  cargado = true;
 
   armarTabs(sess);
-  for (const mod of listaModulos()) renderCronograma(mod);
+  for (const mod of listaModulos()) {
+    mod.onCambio = alCambiarModulo;
+    const ok = await mod.cargar();
+    if (!ok) continue;
+
+    // Base recién creada: el admin siembra el cronograma inicial.
+    if (mod.estaVacio() && esAdmin()) {
+      console.info(`Sembrando el cronograma inicial de ${mod.nombre}…`);
+      await mod.regenerar();
+    }
+    mod.suscribir();
+    alCambiarModulo(mod);
+  }
 }
 
 function alCambiarModulo(mod) {
   renderCronograma(mod);
   const sess = getSession();
-  if (sess && sess.cronograma === mod.id && tabActual === 'mio') {
-    renderMiHorario(mod);
-  }
+  if (sess && sess.puntoVenta === mod.id && tabActual === 'mio') renderMiHorario(mod);
 }
 
 function armarTabs(sess) {
@@ -93,7 +102,7 @@ function armarTabs(sess) {
   if (esAdmin()) {
     tabs.push({ id: 'cc', label: 'ContacCenter' }, { id: 'lp', label: 'Laprida 235' });
   } else {
-    const mod = getModulo(sess.cronograma);
+    const mod = getModulo(sess.puntoVenta);
     if (mod) tabs.push({ id: mod.id, label: mod.nombre });
     tabs.push({ id: 'mio', label: 'Mi horario' });
   }
@@ -109,7 +118,7 @@ function cambiarTab(tabId) {
   document.querySelectorAll('#tabs button').forEach((b) => b.classList.remove('active'));
   $(`tab-${tabId}`)?.classList.add('active');
   document.querySelector(`#tabs button[data-tab="${tabId}"]`)?.classList.add('active');
-  if (tabId === 'mio') renderMiHorario(getModulo(getSession()?.cronograma));
+  if (tabId === 'mio') renderMiHorario(getModulo(getSession()?.puntoVenta));
   window.scrollTo(0, 0);
 }
 
@@ -144,9 +153,8 @@ async function hacerCambioObligatorio() {
 // ------------------------------------------------------------
 //  CONFIGURACIÓN
 // ------------------------------------------------------------
-async function abrirConfig() {
-  const sess = getSession();
-  if (!sess) return;
+function abrirConfig() {
+  if (!getSession()) return;
 
   let html = `
     <div class="stat-heading">Cambiar mi contraseña</div>
@@ -162,7 +170,7 @@ async function abrirConfig() {
       <hr>
       <div class="stat-heading">Zona de riesgo</div>
       <button class="btn-secondary peligro" data-accion="regenerar">Regenerar ambos cronogramas desde cero</button>
-      <div class="muted small mt-4">Descarta todas las ediciones manuales y vuelve a aplicar las reglas por defecto. El historial se conserva.</div>`;
+      <div class="muted small mt-4">Descarta todas las ediciones manuales y vuelve a aplicar las reglas por defecto. Los feriados y el historial se conservan.</div>`;
   }
 
   $('config-body').innerHTML = html;
@@ -178,9 +186,6 @@ async function cargarUsuarios() {
     const faltantes = PADRON.filter((p) => !usuarios.some((u) => u.user === p.user));
 
     let html = '';
-    if (usuarios.length === 0) {
-      html += `<div class="warn-box">Todavía no hay usuarios dados de alta. Creá el padrón inicial para empezar.</div>`;
-    }
     if (faltantes.length > 0) {
       html += `<div class="info-box">Faltan dar de alta <b>${faltantes.length}</b> usuario(s):
         ${esc(faltantes.map((f) => f.user).join(', '))}</div>
@@ -190,12 +195,12 @@ async function cargarUsuarios() {
     html += `<div class="user-list">${usuarios.map((u) => `
       <div class="user-row">
         <div>${esc(u.user)} ${u.vendedor ? `<span class="muted">(${esc(u.vendedor)})</span>` : ''}
-          <span class="role-tag ${u.role === 'admin' ? 'admin' : 'vend'}">${esc(u.role)}</span></div>
-        <div class="muted small">${u.cronograma ? esc(u.cronograma.toUpperCase()) : '—'}</div>
-        <div class="muted small">${u.passChanged ? '🔒 propia' : '🔓 inicial'}</div>
+          <span class="role-tag ${u.rol === 'admin' ? 'admin' : 'vend'}">${esc(u.rol)}</span></div>
+        <div class="muted small">${u.puntoVenta ? esc(u.puntoVenta.toUpperCase()) : '—'}</div>
+        <div class="muted small">${u.passCambiada ? '🔒 propia' : '🔓 inicial'}</div>
       </div>`).join('')}</div>
       <div class="muted small mt-8">Para <b>resetear la contraseña</b> de alguien o <b>dar de baja</b> una cuenta,
-      entrá a la consola de Firebase → Authentication. Por seguridad, esas acciones no se pueden hacer desde el navegador.</div>`;
+      entrá al panel de Supabase → Authentication → Users. Por seguridad, esas acciones no se pueden hacer desde el navegador.</div>`;
 
     cont.className = '';
     cont.innerHTML = html;
@@ -227,7 +232,6 @@ async function hacerCambioPassConfig() {
 async function hacerCrearPadron(btn) {
   if (!confirm('Se van a crear las cuentas faltantes con su contraseña inicial.\n\n¿Continuar?')) return;
   btn.disabled = true;
-  btn.textContent = 'Creando…';
   try {
     const { creados, omitidos, errores } = await crearPadronFaltante((user, estado) => {
       btn.textContent = `${estado}: ${user}…`;
@@ -249,10 +253,10 @@ async function hacerCrearPadron(btn) {
   }
 }
 
-function hacerRegenerar() {
+async function hacerRegenerar() {
   if (!confirm('Vas a REGENERAR ambos cronogramas desde cero.\n\nSe pierden todas las ediciones manuales. ¿Seguro?')) return;
-  for (const mod of listaModulos()) mod.regenerar();
   $('modal-config').classList.remove('open');
+  for (const mod of listaModulos()) await mod.regenerar();
 }
 
 // ------------------------------------------------------------
@@ -286,11 +290,7 @@ document.addEventListener('click', (ev) => {
       if (confirm(`¿Quitar el feriado del ${formatShort(fromISO(iso))}?`)) mod.quitarFeriado(iso);
       break;
     case 'limpiar-historial':
-      if (confirm('¿Borrar todo el historial de correcciones?')) {
-        mod.historial = [];
-        mod.guardar();
-        mod.onCambio?.(mod);
-      }
+      if (confirm('¿Borrar todo el historial de correcciones?')) mod.limpiarHistorial();
       break;
     case 'exportar': mod?.exportarCSV(); break;
 
@@ -309,27 +309,21 @@ document.addEventListener('click', (ev) => {
 
 function agregarFeriado(mod) {
   const fecha = $(`fer-fecha-${mod.id}`).value;
-  const nombre = $(`fer-nombre-${mod.id}`).value.trim() || 'Feriado';
+  const motivo = $(`fer-nombre-${mod.id}`).value.trim() || 'Feriado';
   if (!fecha) { alert('Elegí una fecha.'); return; }
   if (!mod.cronograma[fecha]) { alert('Esa fecha está fuera del período del cronograma.'); return; }
-  mod.agregarFeriado(fecha, nombre);
+  mod.agregarFeriado(fecha, motivo);
 }
 
-// Enter envía el formulario que esté activo.
 document.addEventListener('keydown', (ev) => {
-  if (ev.key !== 'Enter') return;
-  if (ev.target.closest('#login-screen')) hacerLogin();
-  else if (ev.target.closest('#pass-gate')) hacerCambioObligatorio();
-});
-
-// Escape cierra el modal abierto.
-document.addEventListener('keydown', (ev) => {
-  if (ev.key === 'Escape') {
+  if (ev.key === 'Enter') {
+    if (ev.target.closest('#login-screen')) hacerLogin();
+    else if (ev.target.closest('#pass-gate')) hacerCambioObligatorio();
+  } else if (ev.key === 'Escape') {
     document.querySelectorAll('.modal-backdrop.open').forEach((m) => m.classList.remove('open'));
   }
 });
 
-// Click fuera del modal lo cierra.
 document.querySelectorAll('.modal-backdrop').forEach((bd) => {
   bd.addEventListener('click', (ev) => {
     if (ev.target === bd) bd.classList.remove('open');
@@ -338,7 +332,6 @@ document.querySelectorAll('.modal-backdrop').forEach((bd) => {
 
 vigilarConexion();
 
-// Ayuda para el primer arranque: deja a mano las contraseñas iniciales.
 if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
   console.info('Contraseñas iniciales del padrón:',
     Object.fromEntries(PADRON.map((p) => [p.user, passInicial(p.user)])));

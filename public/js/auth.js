@@ -1,102 +1,128 @@
 // ============================================================
 //  AUTENTICACIÓN Y ROLES
 // ============================================================
-// La identidad la maneja Firebase Authentication; el rol vive en /roles/$uid
-// y sólo un admin puede escribirlo (ver database.rules.json). El navegador ya
-// no decide quién es admin: lo decide el servidor en cada lectura y escritura.
+// La identidad la maneja Supabase Auth; el rol vive en la tabla perfiles y
+// las policies RLS lo verifican en cada consulta. El navegador no decide
+// quién es admin: lo decide Postgres.
 
-import {
-  auth, db, ref, get, set, update,
-  signInWithEmailAndPassword, signOut, onAuthStateChanged,
-  updatePassword, reauthenticateWithCredential, EmailAuthProvider,
-  crearCuentaAislada,
-} from './firebase.js';
+import { sb, clienteAislado, traducirDb } from './db.js';
 import { userToEmail, emailToUser, MIN_PASS, PADRON, passInicial } from './config.js';
 
-/** Sesión activa: { uid, user, role, vendedor, cronograma, passChanged } */
+/** Sesión activa: { uid, user, rol, vendedor, puntoVenta, passCambiada } */
 let sesion = null;
 export const getSession = () => sesion;
-export const esAdmin = () => sesion?.role === 'admin';
+export const esAdmin = () => sesion?.rol === 'admin';
+
+const SELECT_PERFIL = 'usuario, rol, pass_cambiada, vendedores ( nombre, punto_venta )';
+
+function armarSesion(uid, email, perfil) {
+  return {
+    uid,
+    user: perfil.usuario || emailToUser(email),
+    rol: perfil.rol,
+    vendedor: perfil.vendedores?.nombre || null,
+    puntoVenta: perfil.vendedores?.punto_venta || null,
+    passCambiada: perfil.pass_cambiada === true,
+  };
+}
 
 /**
- * Registra el callback que se dispara con cada cambio de sesión.
- * Recibe la sesión completa (con rol ya resuelto) o null si no hay nadie.
+ * Registra el callback que corre con cada cambio de sesión.
+ * Recibe la sesión con el rol ya resuelto, o null si no hay nadie.
  */
 export function observarSesion(callback) {
-  onAuthStateChanged(auth, async (usuario) => {
-    if (!usuario) {
+  const resolver = async (session) => {
+    if (!session?.user) {
       sesion = null;
       callback(null);
       return;
     }
-    let perfil = null;
-    try {
-      perfil = (await get(ref(db, `roles/${usuario.uid}`))).val();
-    } catch (e) {
-      console.warn('No se pudo leer el rol:', e);
+    const { data: perfil, error } = await sb
+      .from('perfiles').select(SELECT_PERFIL).eq('id', session.user.id).maybeSingle();
+
+    if (error) {
+      console.error('Leyendo perfil:', error);
+      sesion = null;
+      callback(null, traducirDb(error));
+      return;
     }
     if (!perfil) {
-      // Cuenta sin rol asignado: existe en Auth pero nadie la dio de alta en la
-      // app. Sin rol no puede leer nada, así que se cierra la sesión.
-      await signOut(auth);
+      // La cuenta existe en Auth pero nadie la dio de alta en la app. Sin
+      // perfil las policies no la dejan leer nada, así que se cierra sesión.
+      await sb.auth.signOut();
       sesion = null;
       callback(null, 'Tu cuenta existe pero no tiene un perfil asignado. Pedile al administrador que te dé de alta.');
       return;
     }
-    sesion = {
-      uid: usuario.uid,
-      user: perfil.user || emailToUser(usuario.email),
-      role: perfil.role,
-      vendedor: perfil.vendedor || null,
-      cronograma: perfil.cronograma || null,
-      passChanged: perfil.passChanged === true,
-    };
+    sesion = armarSesion(session.user.id, session.user.email, perfil);
     callback(sesion);
+  };
+
+  sb.auth.getSession().then(({ data }) => resolver(data.session));
+  sb.auth.onAuthStateChange((evento, session) => {
+    // TOKEN_REFRESHED no cambia quién sos; volver a resolver dispararía un
+    // re-render completo cada hora sin motivo.
+    if (evento === 'TOKEN_REFRESHED') return;
+    resolver(session);
   });
 }
 
 const MENSAJES = {
-  'auth/invalid-credential': 'Usuario o contraseña incorrectos.',
-  'auth/invalid-login-credentials': 'Usuario o contraseña incorrectos.',
-  'auth/wrong-password': 'Usuario o contraseña incorrectos.',
-  'auth/user-not-found': 'Usuario o contraseña incorrectos.',
-  'auth/invalid-email': 'El nombre de usuario no es válido.',
-  'auth/user-disabled': 'Esta cuenta está deshabilitada. Hablá con el administrador.',
-  'auth/too-many-requests': 'Demasiados intentos fallidos. Esperá unos minutos.',
-  'auth/network-request-failed': 'Sin conexión. Revisá tu internet.',
-  'auth/weak-password': `La contraseña debe tener al menos ${MIN_PASS} caracteres.`,
-  'auth/email-already-in-use': 'Ese usuario ya existe.',
-  'auth/operation-not-allowed': 'Falta habilitar el proveedor Email/Contraseña en la consola de Firebase.',
+  invalid_credentials: 'Usuario o contraseña incorrectos.',
+  email_not_confirmed: 'Falta desactivar "Confirm email" en Authentication → Providers → Email.',
+  user_already_exists: 'Ese usuario ya existe.',
+  weak_password: `La contraseña debe tener al menos ${MIN_PASS} caracteres.`,
+  over_request_rate_limit: 'Demasiados intentos. Esperá unos minutos.',
+  signup_disabled: 'El alta de usuarios está deshabilitada en el proyecto de Supabase.',
+  email_address_invalid: 'Supabase rechazó el email sintético. Revisá EMAIL_DOMAIN en config.js.',
 };
-export const traducirError = (e) => MENSAJES[e?.code] || e?.message || 'Ocurrió un error inesperado.';
+
+export function traducirError(e) {
+  if (!e) return 'Ocurrió un error inesperado.';
+  if (e.code && MENSAJES[e.code]) return MENSAJES[e.code];
+  const msg = String(e.message || e);
+  if (/Invalid login credentials/i.test(msg)) return MENSAJES.invalid_credentials;
+  if (/Email not confirmed/i.test(msg)) return MENSAJES.email_not_confirmed;
+  if (/already registered/i.test(msg)) return MENSAJES.user_already_exists;
+  if (/Failed to fetch/i.test(msg)) return 'Sin conexión con el servidor.';
+  return msg;
+}
 
 export async function login(user, password) {
-  await signInWithEmailAndPassword(auth, userToEmail(user), password);
+  const { error } = await sb.auth.signInWithPassword({
+    email: userToEmail(user),
+    password,
+  });
+  if (error) throw error;
 }
 
 export async function logout() {
-  await signOut(auth);
+  await sb.auth.signOut();
 }
 
-/**
- * Cambia la contraseña del usuario logueado.
- * Firebase pide reautenticar antes de una operación sensible si la sesión
- * tiene rato, así que se revalida con la contraseña actual.
- */
+/** Cambia la contraseña del usuario logueado. */
 export async function cambiarPassword(passActual, passNueva) {
   if (!passNueva || passNueva.length < MIN_PASS) {
     throw new Error(`La contraseña debe tener al menos ${MIN_PASS} caracteres.`);
   }
-  const usuario = auth.currentUser;
-  if (!usuario) throw new Error('No hay sesión activa.');
+  if (!sesion) throw new Error('No hay sesión activa.');
 
-  const cred = EmailAuthProvider.credential(usuario.email, passActual);
-  await reauthenticateWithCredential(usuario, cred);
-  await updatePassword(usuario, passNueva);
+  // Supabase no pide la contraseña actual para cambiarla, pero verificarla
+  // evita que alguien con la sesión abierta en un equipo ajeno la secuestre.
+  const { error: errLogin } = await sb.auth.signInWithPassword({
+    email: userToEmail(sesion.user),
+    password: passActual,
+  });
+  if (errLogin) throw new Error('La contraseña actual no es correcta.');
 
-  // Las reglas permiten a cada usuario escribir sólo este campo de su perfil.
-  await set(ref(db, `roles/${usuario.uid}/passChanged`), true);
-  if (sesion) sesion.passChanged = true;
+  const { error } = await sb.auth.updateUser({ password: passNueva });
+  if (error) throw error;
+
+  const { error: errPerfil } = await sb
+    .from('perfiles').update({ pass_cambiada: true }).eq('id', sesion.uid);
+  if (errPerfil) throw errPerfil;
+
+  sesion.passCambiada = true;
 }
 
 // ============================================================
@@ -104,29 +130,59 @@ export async function cambiarPassword(passActual, passNueva) {
 // ============================================================
 
 export async function listarUsuarios() {
-  const snap = await get(ref(db, 'roles'));
-  const data = snap.val() || {};
-  return Object.entries(data)
-    .map(([uid, p]) => ({ uid, ...p }))
-    .sort((a, b) => String(a.user).localeCompare(String(b.user)));
+  const { data, error } = await sb
+    .from('perfiles')
+    .select('id, usuario, rol, pass_cambiada, vendedores ( nombre, punto_venta )')
+    .order('usuario');
+  if (error) throw error;
+  return (data || []).map((p) => ({
+    uid: p.id,
+    user: p.usuario,
+    rol: p.rol,
+    passCambiada: p.pass_cambiada,
+    vendedor: p.vendedores?.nombre || null,
+    puntoVenta: p.vendedores?.punto_venta || null,
+  }));
+}
+
+/** Busca el id del vendedor por nombre y punto de venta. */
+async function buscarVendedorId(puntoVenta, nombre) {
+  if (!puntoVenta || !nombre) return null;
+  const { data, error } = await sb
+    .from('vendedores').select('id')
+    .eq('punto_venta', puntoVenta).eq('nombre', nombre).maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error(`El vendedor "${nombre}" no existe en ${puntoVenta}. ¿Corriste schema.sql?`);
+  return data.id;
 }
 
 /**
- * Alta de una cuenta: la crea en Firebase Auth y le escribe el perfil en /roles.
- * Devuelve el uid. Requiere estar logueado como admin (lo exigen las reglas).
+ * Alta de una cuenta: la crea en Auth y le inserta el perfil.
+ * Requiere estar logueado como admin — lo exigen las policies.
  */
-export async function crearUsuario({ user, role, vendedor, cronograma }, password) {
-  const uid = await crearCuentaAislada(userToEmail(user), password);
-  const perfil = { user, role, passChanged: false };
-  if (vendedor) perfil.vendedor = vendedor;
-  if (cronograma) perfil.cronograma = cronograma;
-  await set(ref(db, `roles/${uid}`), perfil);
+export async function crearUsuario({ user, rol, vendedor, puntoVenta }, password) {
+  const vendedorId = await buscarVendedorId(puntoVenta, vendedor);
+
+  const temp = clienteAislado();
+  const { data, error } = await temp.auth.signUp({
+    email: userToEmail(user),
+    password,
+  });
+  if (error) throw error;
+  const uid = data.user?.id;
+  if (!uid) throw new Error('Supabase no devolvió el id del usuario creado.');
+  await temp.auth.signOut();
+
+  const { error: errPerfil } = await sb.from('perfiles').insert({
+    id: uid, usuario: user, rol, vendedor_id: vendedorId, pass_cambiada: false,
+  });
+  if (errPerfil) throw errPerfil;
   return uid;
 }
 
 /**
- * Alta masiva del padrón inicial. Saltea los usuarios que ya existen, así que
- * es seguro volver a correrla para incorporar a alguien que faltaba.
+ * Alta masiva del padrón. Saltea los que ya existen, así que se puede volver
+ * a correr para incorporar a alguien que faltaba.
  */
 export async function crearPadronFaltante(onProgreso = () => {}) {
   const existentes = new Set((await listarUsuarios()).map((u) => u.user));
@@ -141,15 +197,9 @@ export async function crearPadronFaltante(onProgreso = () => {}) {
       creados.push({ user: p.user, pass: passInicial(p.user) });
       onProgreso(p.user, 'creado');
     } catch (e) {
-      // El usuario puede existir en Auth pero no en /roles (alta a medias).
-      const msg = traducirError(e);
-      errores.push({ user: p.user, error: msg });
+      errores.push({ user: p.user, error: traducirError(e) });
       onProgreso(p.user, 'error');
     }
   }
   return { creados, omitidos, errores };
-}
-
-export async function actualizarPerfil(uid, cambios) {
-  await update(ref(db, `roles/${uid}`), cambios);
 }

@@ -10,17 +10,24 @@ let pendientes = [];
 
 const semanasDe = (mod) => agruparPorSemanaDesde(Object.keys(mod.cronograma).sort());
 
-/** Aplica un fix al cronograma y lo anota en el historial. Devuelve el registro. */
-function aplicar(mod, problema, sufijoRegla = '') {
-  const af = problema.autoFix;
-  const antes = mod.cronograma[af.iso][af.turno];
-  mod.cronograma[af.iso][af.turno] = af.despues;
-  if (af.swapPar) {
-    mod.cronograma[af.swapPar.iso][af.swapPar.turno] = af.swapPar.despues;
+/** Las celdas que toca un fix, como lista de cambios. */
+function cambiosDe(autoFix) {
+  const cambios = [{ iso: autoFix.iso, turno: autoFix.turno, vendedor: autoFix.despues }];
+  if (autoFix.swapPar) {
+    cambios.push({
+      iso: autoFix.swapPar.iso,
+      turno: autoFix.swapPar.turno,
+      vendedor: autoFix.swapPar.despues,
+    });
   }
-  const registro = {
+  return cambios;
+}
+
+function registroDe(problema, antes, sufijo = '') {
+  const af = problema.autoFix;
+  return {
     ts: Date.now(),
-    regla: problema.regla + sufijoRegla,
+    regla: problema.regla + sufijo,
     estado: 'aplicada',
     descripcion: problema.descripcion,
     diff: {
@@ -28,14 +35,12 @@ function aplicar(mod, problema, sufijoRegla = '') {
       despues: String(af.despues),
     },
   };
-  mod.historial.push(registro);
-  return registro;
 }
 
 // ------------------------------------------------------------
 //  REVISIÓN CON APROBACIÓN MANUAL
 // ------------------------------------------------------------
-export function revisar(mod, forzarTodo) {
+export async function revisar(mod, forzarTodo) {
   const semanas = semanasDe(mod);
   const fixes = [];
   let revisadas = 0;
@@ -47,17 +52,16 @@ export function revisar(mod, forzarTodo) {
     if (!forzarTodo && mod.revisiones[sem.lunes] === firma) { salteadas++; continue; }
     revisadas++;
     for (const p of mod.detectarProblemas(sem, si)) {
-      fixes.push({ modId: mod.id, sem, semIdx: si, problema: p });
+      fixes.push({ mod, sem, semIdx: si, problema: p });
     }
-    mod.revisiones[sem.lunes] = firma;
+    await mod.guardarRevision(sem.lunes, firma);
   }
 
-  mod.guardar();
-  mostrarModal(mod, fixes, revisadas, salteadas);
+  mostrarModal(fixes, revisadas, salteadas);
 }
 
-function mostrarModal(mod, fixes, revisadas, salteadas) {
-  pendientes = fixes.map((f) => ({ ...f, mod, resuelto: false }));
+function mostrarModal(fixes, revisadas, salteadas) {
+  pendientes = fixes.map((f) => ({ ...f, resuelto: false }));
 
   document.getElementById('modal-fixes-summary').innerHTML =
     `Se revisaron <b>${revisadas}</b> semana(s) (${salteadas} sin cambios desde la última revisión). ` +
@@ -92,35 +96,38 @@ function mostrarModal(mod, fixes, revisadas, salteadas) {
   document.getElementById('modal-fixes').classList.add('open');
 }
 
-export function aplicarFix(i) {
+export async function aplicarFix(i) {
   const f = pendientes[i];
   if (!f || f.resuelto || !f.problema.autoFix) return;
-  aplicar(f.mod, f.problema);
   f.resuelto = true;
-  f.mod.guardar();
+
+  const af = f.problema.autoFix;
+  const antes = f.mod.cronograma[af.iso][af.turno];
+  await f.mod.aplicarCambios(cambiosDe(af));
+  await f.mod.registrarHistorial(registroDe(f.problema, antes));
   document.getElementById(`fix-${i}`)?.classList.add('applied');
-  f.mod.onCambio?.(f.mod);
 }
 
-export function rechazarFix(i) {
+export async function rechazarFix(i) {
   const f = pendientes[i];
   if (!f || f.resuelto) return;
-  f.mod.historial.push({
+  f.resuelto = true;
+
+  await f.mod.registrarHistorial({
     ts: Date.now(), regla: f.problema.regla, estado: 'rechazada',
     descripcion: f.problema.descripcion, diff: null,
   });
-  f.resuelto = true;
-  f.mod.guardar();
   document.getElementById(`fix-${i}`)?.classList.add('rejected');
-  f.mod.onCambio?.(f.mod);
 }
 
-export function aplicarTodas() {
-  pendientes.forEach((f, i) => { if (f.problema.autoFix) aplicarFix(i); });
+export async function aplicarTodas() {
+  for (let i = 0; i < pendientes.length; i++) {
+    if (pendientes[i].problema.autoFix) await aplicarFix(i);
+  }
 }
 
-export function rechazarTodas() {
-  pendientes.forEach((_, i) => rechazarFix(i));
+export async function rechazarTodas() {
+  for (let i = 0; i < pendientes.length; i++) await rechazarFix(i);
 }
 
 // ------------------------------------------------------------
@@ -129,6 +136,9 @@ export function rechazarTodas() {
 // Aplica repetidamente la corrección de mayor prioridad hasta que no quedan
 // fixes automáticos. Corta si vuelve a ver un estado ya visitado, porque eso
 // significa que dos reglas se están pisando y el ciclo no converge.
+//
+// El bucle trabaja sólo en memoria y recién al final escribe todo junto: si
+// guardara fix por fix, una corrección de 40 pasos serían 40 viajes a la base.
 
 const PRIORIDAD = [
   'D-cierre', 'A-imbaud-T', 'A-imbaud-M', 'A-imbaud-total',
@@ -140,9 +150,11 @@ const rank = (regla) => {
   return i === -1 ? 999 : i;
 };
 
-export function corregirAutomatico(mod) {
+export async function corregirAutomatico(mod) {
   const stats = { iters: 0, aplicadas: 0, sinFix: 0, oscilacion: false };
   const vistos = new Set();
+  const netos = new Map(); // "iso|turno" → vendedor final
+  const registros = [];
   const MAX = 200;
 
   for (let iter = 0; iter < MAX; iter++) {
@@ -162,16 +174,28 @@ export function corregirAutomatico(mod) {
     problemas.sort((a, b) => rank(a.regla) - rank(b.regla));
     const siguiente = problemas.find((p) => p.autoFix);
     if (!siguiente) {
-      // Sólo quedan problemas que requieren decisión humana.
-      stats.sinFix = problemas.length;
+      stats.sinFix = problemas.length; // sólo quedan cosas para decidir a mano
       break;
     }
 
-    aplicar(mod, siguiente, ' (auto)');
+    const af = siguiente.autoFix;
+    const antes = mod.cronograma[af.iso][af.turno];
+    for (const c of cambiosDe(af)) {
+      mod.cronograma[c.iso][c.turno] = c.vendedor;
+      netos.set(`${c.iso}|${c.turno}`, c.vendedor);
+    }
+    registros.push(registroDe(siguiente, antes, ' (auto)'));
     stats.aplicadas++;
   }
 
-  mod.guardar();
+  if (netos.size) {
+    const cambios = [...netos].map(([clave, vendedor]) => {
+      const [iso, turno] = clave.split('|');
+      return { iso, turno, vendedor };
+    });
+    await mod.aplicarCambios(cambios);
+    await mod.registrarHistorial(registros);
+  }
   mod.onCambio?.(mod);
   mostrarResumen(stats);
 }

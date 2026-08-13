@@ -7,7 +7,7 @@ import {
   toISO, fromISO, addDays, formatShort, formatLargo, hoyISO, esc,
   DIAS_LARGOS, MESES_LARGOS, agruparPorSemanaDesde,
 } from './utils.js';
-import { CC_SEMANAS_FIJAS, CC_TIPO_NOMBRES, tipoDeSemana } from './schedule-cc.js';
+import { CC_SEMANAS_FIJAS, CC_TIPO_NOMBRES, tipoDeSemana } from './reglas-cc.js';
 
 const pad2 = (n) => String(n).padStart(2, '0');
 
@@ -227,7 +227,7 @@ export function renderMiHorario(mod) {
   const container = document.getElementById('tab-mio');
   if (!container) return;
 
-  if (!sess || sess.role === 'admin' || !mod) {
+  if (!sess || sess.rol === 'admin' || !mod) {
     container.innerHTML = '<div class="empty-state">Esta vista es para vendedores.</div>';
     return;
   }

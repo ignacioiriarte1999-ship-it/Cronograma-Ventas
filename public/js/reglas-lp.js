@@ -16,7 +16,7 @@
 //  b) El orden inicial alfabético deja a Juarez (posición 4) cubriendo el
 //     sábado en las semanas 6 y 18 — antes no le tocaba ninguno.
 
-import { crearModulo, esqueletoSemestre } from './schedule.js';
+import { esqueletoSemestre } from './periodo.js';
 import { toISO, fromISO, addDays, formatShort, agruparPorSemanaDesde } from './utils.js';
 
 export const LP_VENDS = ['Arevalo', 'De la Rosa', 'Diaz', 'Erazo', 'Juarez', 'Orellana',
@@ -37,8 +37,8 @@ const LP_SLOTS = [
   { dia: 5, turno: 'manana' }, // S-M
 ];
 
-function generar() {
-  const cronograma = esqueletoSemestre();
+function generar(feriados = {}) {
+  const cronograma = esqueletoSemestre(feriados);
   const semanas = agruparPorSemanaDesde(Object.keys(cronograma).sort());
 
   for (let w = 0; w < semanas.length; w++) {
@@ -112,7 +112,7 @@ function detectarProblemas(sem) {
   return issues;
 }
 
-export const LP = crearModulo({
+export const CONFIG_LP = {
   id: 'lp',
   nombre: 'Laprida 235',
   subtitulo: '12 vendedores en cola cíclica · rotación +1 por semana · 1 descansa cada semana',
@@ -124,4 +124,4 @@ export const LP = crearModulo({
     horarioManana: '8 a 14',
     horarioTarde: '14 a 20',
   },
-});
+};

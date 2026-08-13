@@ -5,57 +5,70 @@ dos puntos de venta. El admin edita; cada vendedor entra y ve sólo sus turnos.
 
 - **Período**: 06/07/2026 → 03/01/2027 (26 semanas)
 - **Turnos**: mañana 8 a 14 · tarde 14 a 20 · sábado sólo mañana · domingo cerrado
+- **Stack**: Supabase (Postgres + Auth + Realtime) y ES modules nativos, sin build
 
 ---
 
 ## Puesta en marcha
 
-Hace falta hacer esto **una sola vez**. Los pasos 1 a 4 son en la consola de
-Firebase (https://console.firebase.google.com → proyecto `cronograma-ventas`).
+Hace falta hacer esto **una sola vez**.
 
-### 1. Habilitar el login por contraseña
+### 1. Crear el proyecto en Supabase
 
-**Authentication → Sign-in method → Email/Password → Habilitar → Guardar.**
+En https://supabase.com → **New project**. Elegí la región más cercana
+(São Paulo) y guardate la contraseña de la base que te pide, aunque la app no
+la use.
 
-Sin esto la app muestra: *"Falta habilitar el proveedor Email/Contraseña"*.
+### 2. Crear las tablas
 
-### 2. Crear la cuenta del administrador
+**SQL Editor → New query**, pegá todo el contenido de
+[`supabase/schema.sql`](supabase/schema.sql) y ejecutá.
+
+Eso crea las tablas, las policies RLS, la publicación de Realtime y siembra los
+dos puntos de venta, los 15 vendedores y los feriados de 2026. El script es
+idempotente: se puede volver a correr sin romper nada.
+
+### 3. Desactivar la confirmación por email
+
+**Authentication → Providers → Email** → desactivar **"Confirm email"**.
+
+Los vendedores no tienen casilla corporativa, así que la app les arma un email
+sintético (`ortiz@cronograma.local`). Si Supabase espera una confirmación, ese
+mail no llega a ningún lado y nadie puede entrar.
+
+### 4. Configurar la app
+
+**Settings → API**, copiá **Project URL** y la clave **anon / public**, y
+pegalas en [`public/js/config.js`](public/js/config.js):
+
+```js
+export const SUPABASE_URL = 'https://xxxxxxxx.supabase.co';
+export const SUPABASE_ANON_KEY = 'eyJhbGci...';
+```
+
+Ambas son públicas por diseño: identifican al proyecto y no autorizan nada por
+sí solas. Lo que protege los datos son las policies RLS. **Nunca** pongas acá la
+`service_role key`, que sí saltea todas las policies.
+
+### 5. Crear el usuario administrador
 
 **Authentication → Users → Add user**
 
 - Email: `admin@cronograma.local`
 - Contraseña: la que elijas (mínimo 6 caracteres)
+- Marcá **Auto Confirm User**
 
-Copiá el **User UID** que aparece en la lista: lo necesitás en el paso siguiente.
+Copiá el **User UID**, y en **SQL Editor** corré esto reemplazándolo:
 
-### 3. Darle el rol de admin
-
-**Realtime Database → Data**, y creá esta estructura reemplazando `UID_DEL_ADMIN`
-por el UID que copiaste:
-
-```
-roles
- └── UID_DEL_ADMIN
-      ├── user: "admin"
-      ├── role: "admin"
-      └── passChanged: true
+```sql
+insert into perfiles (id, usuario, rol, pass_cambiada)
+values ('PEGAR_EL_UID_ACA', 'admin', 'admin', true);
 ```
 
-Este paso se hace a mano porque es el único que no puede hacer la app: sin un
-admin existente, nadie tiene permiso para crear el primero.
+Este paso va a mano porque es el único que la app no puede hacer sola: sin un
+admin existente, las policies no le dan permiso a nadie para crear el primero.
 
-### 4. Publicar las reglas de seguridad
-
-**Realtime Database → Rules**, pegá el contenido de
-[`database.rules.json`](database.rules.json) y publicá.
-
-Mientras tanto, **borrá el nodo `users`** si todavía existe: es de la versión
-vieja y contiene hashes de contraseñas que ya no se usan.
-
-> Con estas reglas publicadas, la base deja de ser accesible sin login. Antes,
-> cualquiera con la URL podía leerla y escribirla entera con un `curl`.
-
-### 5. Dar de alta a los vendedores
+### 6. Dar de alta a los vendedores
 
 Entrá a la app como `admin`, abrí **⚙️ → Usuarios** y tocá
 **"Crear los N usuarios faltantes"**. La app crea las 15 cuentas restantes y te
@@ -63,7 +76,10 @@ muestra la contraseña inicial de cada una para que se las repartas.
 
 La contraseña inicial es `<apellido sin guiones>2026` — por ejemplo
 `ortiz2026`, `desantis2026`, `delarosa2026`. **La app obliga a cambiarla en el
-primer ingreso**, así que esa contraseña sirve una sola vez.
+primer ingreso**, así que sirve una sola vez.
+
+La primera vez que entra el admin, si la tabla `turnos` está vacía, la app
+genera y guarda el cronograma de los dos puntos de venta automáticamente.
 
 ---
 
@@ -80,7 +96,7 @@ dos pestañas: el cronograma de su punto de venta en **solo lectura**, y
 Ve los dos cronogramas y puede editarlos:
 
 - **Clic en una celda** rota el vendedor asignado a ese turno.
-- **Feriados**: agregar o quitar. El día queda cerrado y el ciclo no se altera.
+- **Feriados**: agregar o quitar. El día queda cerrado y libera sus turnos.
 - **Corrector**: revisa las reglas de cada semana y propone los intercambios que
   las resuelven, para aprobarlos de a uno o todos juntos.
   *Revisar cambios recientes* saltea las semanas que no se tocaron desde la
@@ -89,7 +105,8 @@ Ve los dos cronogramas y puede editarlos:
   que no quedan más. Corta solo si detecta que dos reglas se pisan entre sí.
 - **Exportar CSV** para imprimir o mandar por mail.
 
-Todo cambio se sincroniza al instante en la pantalla de todos los conectados.
+Todo cambio aparece al instante en la pantalla de los demás conectados, vía
+Supabase Realtime.
 
 ---
 
@@ -151,54 +168,81 @@ public/
 ├── index.html          Estructura de la página (sin lógica)
 ├── css/styles.css
 └── js/
-    ├── config.js       Config de Firebase, período, feriados, padrón
+    ├── config.js       Credenciales de Supabase, período, padrón
     ├── utils.js        Fechas, formato, escapado de HTML
-    ├── firebase.js     Inicialización, conexión, alta aislada de cuentas
+    ├── periodo.js      El semestre y su esqueleto
+    ├── reglas-cc.js    ContacCenter: generador y reglas   ← lógica pura
+    ├── reglas-lp.js    Laprida 235: generador y reglas    ← lógica pura
+    ├── db.js           Cliente de Supabase y estado de conexión
     ├── auth.js         Login, sesión, roles, alta de usuarios
-    ├── schedule.js     Base común: persistencia, stats, edición, CSV
-    ├── schedule-cc.js  ContacCenter: generador y reglas
-    ├── schedule-lp.js  Laprida 235: generador y reglas
-    ├── modules.js      Registro de cronogramas
+    ├── schedule.js     Persistencia, stats, edición, CSV
+    ├── modules.js      Une las reglas con la persistencia
     ├── corrector.js    Detección y aplicación de correcciones
     ├── render.js       Vistas de cronograma y "Mi horario"
     └── main.js         Arranque, pestañas, eventos, configuración
 
-database.rules.json     Reglas de seguridad de la Realtime Database
-firebase.json           Hosting y despliegue de reglas
-legacy/                 Versión anterior de un solo archivo, como referencia
+supabase/schema.sql     Tablas, policies RLS, Realtime y datos iniciales
+legacy/                 Versión monolítica original, como referencia
 ```
+
+`reglas-cc.js` y `reglas-lp.js` no importan `db.js` ni `schedule.js`: son
+funciones puras. Eso permite ejecutarlas y verificarlas sin conexión ni sesión
+—útil para comprobar que un cambio en las reglas no rompe el reparto.
 
 ### Publicar
 
-Con el CLI de Firebase (necesita Node.js instalado):
+El contenido de `public/` es estático: sirve cualquier hosting (Netlify, Vercel,
+Cloudflare Pages, GitHub Pages).
 
-```bash
-npm install -g firebase-tools && firebase login && firebase deploy
-```
+---
 
-Alternativamente, subir el contenido de `public/` a cualquier hosting estático.
+## Modelo de datos
+
+| Tabla | Qué guarda |
+|---|---|
+| `puntos_venta` | `cc` y `lp`, con sus horarios |
+| `vendedores` | Nombre y orden dentro de cada punto de venta |
+| `perfiles` | Extiende `auth.users` con usuario, rol y vendedor asociado |
+| `turnos` | **Una fila por turno asignado** (`punto_venta`, `fecha`, `turno`) |
+| `feriados` | Fecha y motivo, por punto de venta |
+| `historial` | Correcciones aplicadas y rechazadas, con autor |
+| `revisiones` | Huella de la última revisión de cada semana |
+
+Los domingos no se guardan: se derivan por código. Un slot sin fila es un turno
+vacío.
+
+**Por qué una fila por turno y no un JSON**: un clic en una celda actualiza una
+fila, no el semestre entero. Además de ser más liviano, evita que dos admins
+editando a la vez se pisen —que es lo que pasaba con el diseño anterior, donde
+la última escritura sobrescribía todo sin aviso.
 
 ---
 
 ## Seguridad
 
-- La identidad la maneja **Firebase Authentication**; el navegador ya no decide
-  quién es admin.
-- El rol vive en `/roles/$uid` y **sólo un admin puede escribirlo**. Cada usuario
-  puede modificar un único campo del suyo: `passChanged`.
-- Los cronogramas los **lee cualquier usuario logueado** y los **escribe sólo un
-  admin** — verificado por el servidor en cada operación, no por la interfaz.
-- Las contraseñas nunca pasan por la base: las guarda Firebase Auth con su
-  propio hashing.
+- La identidad la maneja **Supabase Auth**; el navegador no decide quién es
+  admin.
+- El rol vive en `perfiles` y las **policies RLS** lo verifican en cada consulta.
+  El patrón es: lee cualquier usuario autenticado, escribe sólo el admin.
+- Un vendedor sólo puede modificar `pass_cambiada` de su propio perfil. Un
+  trigger bloquea que se cambie el rol a sí mismo.
+- La función `es_admin()` es `SECURITY DEFINER` a propósito: si consultara
+  `perfiles` bajo RLS, las policies se llamarían a sí mismas y Postgres cortaría
+  por recursión.
+- Las contraseñas nunca pasan por las tablas: las guarda Supabase Auth.
 - Los nombres y motivos que tipea el admin se escapan antes de mostrarse.
 
-La config de Firebase en `config.js` es pública por diseño: identifica al
-proyecto, no autoriza nada. Lo que protege la base son las reglas.
-
-### Tareas que quedan en la consola de Firebase
+### Tareas que quedan en el panel de Supabase
 
 Resetear la contraseña de alguien o dar de baja una cuenta se hace desde
-**Authentication → Users**. No se pueden hacer desde el navegador: el SDK web no
-permite que un usuario opere sobre la cuenta de otro, y está bien que así sea.
+**Authentication → Users**. No se pueden hacer desde el navegador: requieren la
+`service_role key`, que jamás debe estar en el código del cliente.
 
-Al dar de baja a alguien, borrá también su nodo en `/roles`.
+Al dar de baja a alguien, su fila en `perfiles` se borra sola (`on delete
+cascade`).
+
+### Si el proyecto se pausa
+
+El plan gratuito de Supabase **pausa los proyectos tras 7 días sin actividad**;
+hay que despertarlos desde el panel. Con uso diario no debería pasar, pero si la
+app aparece caída un lunes, mirá eso primero.

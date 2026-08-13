@@ -17,7 +17,7 @@
 //    Ortiz y De Santis rotan entre 12 patrones, para que nadie quede atado a
 //    una franja fija (por ejemplo, siempre viernes a la mañana).
 
-import { crearModulo, esqueletoSemestre } from './schedule.js';
+import { esqueletoSemestre } from './periodo.js';
 import { toISO, fromISO, addDays, formatShort, agruparPorSemanaDesde } from './utils.js';
 
 export const CC_VENDS = ['Imbaud', 'Ortiz', 'De Santis'];
@@ -133,8 +133,8 @@ function generarSemana(tipo, semIdx) {
   return w;
 }
 
-function generar() {
-  const cronograma = esqueletoSemestre();
+function generar(feriados = {}) {
+  const cronograma = esqueletoSemestre(feriados);
   const semanas = agruparPorSemanaDesde(Object.keys(cronograma).sort());
 
   for (let i = 0; i < semanas.length; i++) {
@@ -278,7 +278,7 @@ function detectarProblemas(sem) {
   return issues;
 }
 
-export const CC = crearModulo({
+export const CONFIG_CC = {
   id: 'cc',
   nombre: 'ContacCenter',
   subtitulo: '3 vendedores · ciclo de 3 semanas que rota el sábado · Imbaud 3 turnos (2M+1T) · Ortiz y De Santis 4 turnos · regla del cierre activa',
@@ -290,4 +290,4 @@ export const CC = crearModulo({
     horarioManana: '8 a 14',
     horarioTarde: '14 a 20',
   },
-});
+};
