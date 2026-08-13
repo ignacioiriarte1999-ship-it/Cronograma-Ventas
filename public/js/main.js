@@ -78,17 +78,46 @@ async function iniciarApp(sess) {
   armarTabs(sess);
   for (const mod of listaModulos()) {
     mod.onCambio = alCambiarModulo;
-    const ok = await mod.cargar();
-    if (!ok) continue;
+    avisoEnPanel(mod, `Cargando ${esc(mod.nombre)}…`);
+
+    let ok = false;
+    try {
+      ok = await mod.cargar();
+    } catch (e) {
+      console.error(`Cargando ${mod.id}:`, e);
+      avisoEnPanel(mod, `No se pudo cargar ${esc(mod.nombre)}.`, e.message);
+      continue;
+    }
+    if (!ok) {
+      avisoEnPanel(mod, `No se pudo cargar ${esc(mod.nombre)}.`,
+        'Revisá la consola del navegador para ver el detalle.');
+      continue;
+    }
 
     // Base recién creada: el admin siembra el cronograma inicial.
-    if (mod.estaVacio() && esAdmin()) {
-      console.info(`Sembrando el cronograma inicial de ${mod.nombre}…`);
-      await mod.regenerar();
+    if (mod.estaVacio()) {
+      if (esAdmin()) {
+        console.info(`Sembrando el cronograma inicial de ${mod.nombre}…`);
+        await mod.regenerar();
+      } else {
+        avisoEnPanel(mod, `${esc(mod.nombre)} todavía no tiene turnos cargados.`,
+          'Pedile al administrador que los genere.');
+        continue;
+      }
     }
     mod.suscribir();
     alCambiarModulo(mod);
   }
+}
+
+/** Mensaje a pantalla completa dentro de la pestaña de un cronograma. */
+function avisoEnPanel(mod, titulo, detalle = '') {
+  const panel = $(`tab-${mod.id}`);
+  if (!panel) return;
+  panel.innerHTML = `<div class="empty-state">
+    <div>${titulo}</div>
+    ${detalle ? `<div class="small mt-8">${esc(detalle)}</div>` : ''}
+  </div>`;
 }
 
 function alCambiarModulo(mod) {

@@ -8,6 +8,7 @@
 
 import { sb, traducirDb } from './db.js';
 import { esAdmin, getSession } from './auth.js';
+import { esqueletoSemestre } from './periodo.js';
 import { fromISO, DIAS_LARGOS } from './utils.js';
 
 const avisarError = (contexto, error) => {
