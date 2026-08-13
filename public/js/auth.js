@@ -157,27 +157,45 @@ async function buscarVendedorId(puntoVenta, nombre) {
   return data.id;
 }
 
+/** Todos los vendedores, para el desplegable del alta. */
+export async function listarVendedores() {
+  const { data, error } = await sb
+    .from('vendedores').select('id, nombre, punto_venta').order('punto_venta').order('orden');
+  if (error) throw error;
+  return data || [];
+}
+
 /**
  * Alta de una cuenta: la crea en Auth y le inserta el perfil.
  * Requiere estar logueado como admin — lo exigen las policies.
+ *
+ * `vendedorId` es opcional: sin él queda un usuario de sólo lectura que ve los
+ * dos cronogramas pero no tiene vista "Mi horario", porque no representa a
+ * nadie del padrón. Útil para encargados o supervisores.
  */
-export async function crearUsuario({ user, rol, vendedor, puntoVenta }, password) {
-  const vendedorId = await buscarVendedorId(puntoVenta, vendedor);
+export async function crearUsuario({ user, rol, vendedorId = null, passCambiada = false }, password) {
+  const usuario = String(user).trim().toLowerCase();
+  if (!usuario) throw new Error('Falta el nombre de usuario.');
+  if (!password || password.length < MIN_PASS) {
+    throw new Error(`La contraseña debe tener al menos ${MIN_PASS} caracteres.`);
+  }
 
   const temp = clienteAislado();
-  const { data, error } = await temp.auth.signUp({
-    email: userToEmail(user),
-    password,
-  });
+  const { data, error } = await temp.auth.signUp({ email: userToEmail(usuario), password });
   if (error) throw error;
   const uid = data.user?.id;
   if (!uid) throw new Error('Supabase no devolvió el id del usuario creado.');
   await temp.auth.signOut();
 
   const { error: errPerfil } = await sb.from('perfiles').insert({
-    id: uid, usuario: user, rol, vendedor_id: vendedorId, pass_cambiada: false,
+    id: uid, usuario, rol, vendedor_id: vendedorId, pass_cambiada: passCambiada,
   });
-  if (errPerfil) throw errPerfil;
+  if (errPerfil) {
+    // La cuenta quedó en Auth sin perfil; sin él no puede leer nada, pero hay
+    // que decirlo para que se limpie desde el panel de Supabase.
+    throw new Error(`${traducirError(errPerfil)}\n\nLa cuenta "${usuario}" quedó creada en `
+      + 'Authentication pero sin perfil. Borrala desde el panel de Supabase y volvé a intentar.');
+  }
   return uid;
 }
 
@@ -194,7 +212,8 @@ export async function crearPadronFaltante(onProgreso = () => {}) {
   for (const p of PADRON) {
     if (existentes.has(p.user)) { omitidos.push(p.user); onProgreso(p.user, 'omitido'); continue; }
     try {
-      await crearUsuario(p, passInicial(p.user));
+      const vendedorId = await buscarVendedorId(p.puntoVenta, p.vendedor);
+      await crearUsuario({ user: p.user, rol: p.rol, vendedorId }, passInicial(p.user));
       creados.push({ user: p.user, pass: passInicial(p.user) });
       onProgreso(p.user, 'creado');
     } catch (e) {

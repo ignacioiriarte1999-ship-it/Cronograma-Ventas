@@ -4,7 +4,7 @@
 import { vigilarConexion } from './db.js';
 import {
   observarSesion, login, logout, getSession, esAdmin, traducirError,
-  cambiarPassword, listarUsuarios, crearPadronFaltante,
+  cambiarPassword, listarUsuarios, crearPadronFaltante, crearUsuario, listarVendedores,
 } from './auth.js';
 import { MIN_PASS, passInicial, PADRON } from './config.js';
 import { esc, fromISO, formatShort } from './utils.js';
@@ -127,18 +127,28 @@ function alCambiarModulo(mod) {
 }
 
 function armarTabs(sess) {
-  const tabs = [];
+  const todos = listaModulos().map((m) => ({ id: m.id, label: m.nombre }));
+  const propio = getModulo(sess.puntoVenta);
+  let tabs;
+  let inicial;
+
   if (esAdmin()) {
-    tabs.push({ id: 'cc', label: 'ContacCenter' }, { id: 'lp', label: 'Laprida 235' });
+    tabs = todos;
+    inicial = 'cc';
+  } else if (propio) {
+    // Vendedor: su punto de venta y sus propios turnos.
+    tabs = [{ id: propio.id, label: propio.nombre }, { id: 'mio', label: 'Mi horario' }];
+    inicial = 'mio';
   } else {
-    const mod = getModulo(sess.puntoVenta);
-    if (mod) tabs.push({ id: mod.id, label: mod.nombre });
-    tabs.push({ id: 'mio', label: 'Mi horario' });
+    // Sólo lectura sin vendedor asociado: ve todo, no edita nada.
+    tabs = todos;
+    inicial = 'cc';
   }
+
   $('tabs').innerHTML = tabs
     .map((t) => `<button data-accion="tab" data-tab="${t.id}">${esc(t.label)}</button>`)
     .join('');
-  cambiarTab(esAdmin() ? 'cc' : 'mio');
+  cambiarTab(inicial);
 }
 
 function cambiarTab(tabId) {
@@ -194,7 +204,27 @@ function abrirConfig() {
     <div id="cfg-msg" class="form-msg"></div>`;
 
   if (esAdmin()) {
-    html += `<hr><div class="stat-heading">Usuarios</div>
+    html += `<hr><div class="stat-heading">Crear usuario</div>
+      <div class="alta-form">
+        <input class="txt" id="nu-user" placeholder="Usuario (o correo completo)"
+               autocapitalize="none" spellcheck="false" />
+        <input class="txt" id="nu-pass" type="password" placeholder="Contraseña (mín. ${MIN_PASS})"
+               autocomplete="new-password" />
+        <select class="txt" id="nu-rol">
+          <option value="vendedor">Solo lectura</option>
+          <option value="admin">Administrador (puede editar)</option>
+        </select>
+        <select class="txt" id="nu-vend"><option value="">Sin vendedor asociado</option></select>
+      </div>
+      <label class="check"><input type="checkbox" id="nu-forzar" checked />
+        Pedirle que cambie la contraseña al entrar</label>
+      <button class="btn-primary mt-8" data-accion="crear-usuario">Crear usuario</button>
+      <div id="nu-msg" class="form-msg"></div>
+      <div class="muted small mt-4">Asociá un vendedor para que además vea la pestaña
+        <b>Mi horario</b> con sus propios turnos. Sin asociar, ve los dos cronogramas
+        completos, siempre en modo lectura.</div>
+
+      <hr><div class="stat-heading">Usuarios</div>
       <div id="cfg-usuarios" class="muted small">Cargando…</div>
       <hr>
       <div class="stat-heading">Zona de riesgo</div>
@@ -204,7 +234,64 @@ function abrirConfig() {
 
   $('config-body').innerHTML = html;
   $('modal-config').classList.add('open');
-  if (esAdmin()) cargarUsuarios();
+  if (esAdmin()) {
+    cargarUsuarios();
+    cargarDesplegableVendedores();
+  }
+}
+
+async function cargarDesplegableVendedores() {
+  const sel = $('nu-vend');
+  if (!sel) return;
+  try {
+    const vends = await listarVendedores();
+    const ocupados = new Set((await listarUsuarios()).map((u) => u.vendedor).filter(Boolean));
+    const porPv = { cc: 'ContacCenter', lp: 'Laprida 235' };
+    let html = '<option value="">Sin vendedor asociado</option>';
+    for (const [pv, etiqueta] of Object.entries(porPv)) {
+      const propios = vends.filter((v) => v.punto_venta === pv);
+      if (!propios.length) continue;
+      html += `<optgroup label="${etiqueta}">`;
+      for (const v of propios) {
+        const usado = ocupados.has(v.nombre) ? ' — ya tiene cuenta' : '';
+        html += `<option value="${v.id}">${esc(v.nombre)}${usado}</option>`;
+      }
+      html += '</optgroup>';
+    }
+    sel.innerHTML = html;
+  } catch (e) {
+    console.error('Cargando vendedores:', e);
+  }
+}
+
+async function hacerCrearUsuario(btn) {
+  const msg = $('nu-msg');
+  msg.className = 'form-msg err';
+  const user = $('nu-user').value.trim();
+  const pass = $('nu-pass').value;
+  const rol = $('nu-rol').value;
+  const vendedorId = $('nu-vend').value ? Number($('nu-vend').value) : null;
+  const forzar = $('nu-forzar').checked;
+
+  if (!user) { msg.textContent = 'Poné un nombre de usuario.'; return; }
+  if (pass.length < MIN_PASS) { msg.textContent = `La contraseña necesita al menos ${MIN_PASS} caracteres.`; return; }
+
+  btn.disabled = true;
+  btn.textContent = 'Creando…';
+  try {
+    await crearUsuario({ user, rol, vendedorId, passCambiada: !forzar }, pass);
+    msg.className = 'form-msg ok';
+    msg.textContent = `✓ Usuario "${user.toLowerCase()}" creado.`;
+    $('nu-user').value = '';
+    $('nu-pass').value = '';
+    cargarUsuarios();
+    cargarDesplegableVendedores();
+  } catch (e) {
+    msg.textContent = traducirError(e);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Crear usuario';
+  }
 }
 
 async function cargarUsuarios() {
@@ -309,6 +396,7 @@ document.addEventListener('click', (ev) => {
     case 'cerrar-config': $('modal-config').classList.remove('open'); break;
     case 'cfg-pass': hacerCambioPassConfig(); break;
     case 'crear-padron': hacerCrearPadron(el); break;
+    case 'crear-usuario': hacerCrearUsuario(el); break;
     case 'regenerar': hacerRegenerar(); break;
     case 'pass-gate-submit': hacerCambioObligatorio(); break;
     case 'pass-gate-salir': logout(); break;

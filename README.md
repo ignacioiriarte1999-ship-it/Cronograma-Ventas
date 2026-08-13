@@ -80,18 +80,51 @@ Conviene que los administradores tengan correo real: son las únicas cuentas que
 pueden recuperar la contraseña por mail. A las sintéticas de los vendedores no
 les llega nada, y el reseteo hay que hacerlo desde el panel de Supabase.
 
-### 6. Dar de alta a los vendedores
+### 6. Dar de alta al resto de los usuarios
 
-Entrá a la app como `admin`, abrí **⚙️ → Usuarios** y tocá
-**"Crear los N usuarios faltantes"**. La app crea las 15 cuentas restantes y te
-muestra la contraseña inicial de cada una para que se las repartas.
+Entrá a la app como admin y abrí **⚙️ Configuración**. Hay dos caminos:
 
-La contraseña inicial es `<apellido sin guiones>2026` — por ejemplo
-`ortiz2026`, `desantis2026`, `delarosa2026`. **La app obliga a cambiarla en el
-primer ingreso**, así que sirve una sola vez.
+**Uno por uno** — con el formulario *Crear usuario*, eligiendo vos el nombre y
+la contraseña:
+
+| Campo | Qué poner |
+|---|---|
+| Usuario | Apellido en minúsculas, o un correo completo |
+| Contraseña | Mínimo 6 caracteres |
+| Rol | *Solo lectura* o *Administrador* |
+| Vendedor asociado | Opcional (ver abajo) |
+
+**Los 15 de una vez** — el botón *Crear los N usuarios faltantes* da de alta el
+padrón completo con la contraseña `<apellido sin guiones>2026` (`ortiz2026`,
+`desantis2026`, `delarosa2026`) y te la muestra para repartir.
+
+En ambos casos, si dejás tildado *"Pedirle que cambie la contraseña al entrar"*,
+esa contraseña sirve una sola vez: la app no lo deja pasar sin elegir una nueva.
+
+#### Qué cambia el vendedor asociado
+
+| | Ve | Pestaña "Mi horario" |
+|---|---|---|
+| **Con vendedor asociado** | Sólo su punto de venta | Sí, con sus turnos |
+| **Sin vendedor asociado** | Los dos cronogramas | No |
+
+Las dos variantes son de sólo lectura. Eso no depende de la interfaz sino de las
+policies: un usuario sin rol admin no puede escribir ni entrando por fuera de la
+app.
 
 La primera vez que entra el admin, si la tabla `turnos` está vacía, la app
 genera y guarda el cronograma de los dos puntos de venta automáticamente.
+
+---
+
+## Publicar en Vercel
+
+El repo ya trae `vercel.json`, así que no hay nada que configurar: importás el
+repositorio en https://vercel.com/new y deployás. Vercel sirve `public/` como
+sitio estático —no hay build— y cada `git push` publica solo.
+
+No hace falta cargar variables de entorno: la URL y la clave publishable viven
+en `config.js` y son públicas por diseño.
 
 ---
 
