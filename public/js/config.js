@@ -14,7 +14,20 @@ export const SUPABASE_ANON_KEY = 'sb_publishable_7v-ndT65JyD3n0vh-4LBEw_IvLfyAOC
 // Supabase Auth necesita un email. Los vendedores no tienen casilla
 // corporativa, así que se construye una sintética: ortiz@cronograma.local
 export const EMAIL_DOMAIN = 'cronograma.local';
-export const userToEmail = (user) => `${String(user).trim().toLowerCase()}@${EMAIL_DOMAIN}`;
+
+/**
+ * Convierte lo tipeado en el login al email con el que autentica Supabase.
+ *
+ * Se acepta un email completo tal cual para que las cuentas creadas a mano en
+ * el panel de Supabase —típicamente la del admin, con su casilla real— puedan
+ * entrar sin recrearlas. Esas además son las únicas que pueden recuperar la
+ * contraseña por mail: a las sintéticas no les llega nada.
+ */
+export const userToEmail = (entrada) => {
+  const v = String(entrada).trim().toLowerCase();
+  return v.includes('@') ? v : `${v}@${EMAIL_DOMAIN}`;
+};
+
 export const emailToUser = (email) => String(email || '').split('@')[0];
 
 // Mínimo que exige Supabase Auth por defecto.
@@ -33,9 +46,11 @@ export const FIN_SEMESTRE = '2027-01-03';
 // Después de eso, la fuente de verdad es Supabase Auth + la tabla perfiles.
 // La contraseña inicial es <apellido sin guiones>2026 y la app obliga a
 // cambiarla en el primer ingreso.
+//
+// Los administradores no van acá: se crean a mano en el panel de Supabase,
+// con su casilla real, para que puedan recuperar la contraseña por mail.
 
 export const PADRON = [
-  { user: 'admin',       rol: 'admin',    vendedor: null,         puntoVenta: null },
   { user: 'imbaud',      rol: 'vendedor', vendedor: 'Imbaud',     puntoVenta: 'cc' },
   { user: 'ortiz',       rol: 'vendedor', vendedor: 'Ortiz',      puntoVenta: 'cc' },
   { user: 'de_santis',   rol: 'vendedor', vendedor: 'De Santis',  puntoVenta: 'cc' },

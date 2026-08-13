@@ -63,15 +63,22 @@ sí solas. Lo que protege los datos son las policies RLS. **Nunca** pongas acá 
 
 **Authentication → Users → Add user**
 
-- Email: `admin@cronograma.local` — el nombre antes de la `@` es el usuario
-  con el que vas a entrar. Si preferís `ignacio`, poné `ignacio@cronograma.local`.
+- Email: **usá tu casilla real** (por ejemplo `ignacio@gmail.com`)
 - Contraseña: la que elijas (mínimo 6 caracteres)
 - Marcá **Auto Confirm User**
 
-Listo, ya es admin: un trigger del schema convierte en administrador al primer
-usuario que se dé de alta, porque hasta que exista uno las policies no
-autorizan a nadie a crear el primero. A partir de ahí el trigger no vuelve a
-actuar y las altas siguientes salen por la app.
+Ya es admin: un trigger del schema convierte en administrador al primer usuario
+que se dé de alta, porque hasta que exista uno las policies no autorizan a nadie
+a crear el primero. Después el trigger no vuelve a actuar y las altas siguientes
+salen por la app.
+
+**Para entrar, escribí el correo completo en el campo Usuario.** La app le
+agrega `@cronograma.local` a lo que tipees sólo si no contiene `@`, así que los
+vendedores usan su apellido y los admin su correo.
+
+Conviene que los administradores tengan correo real: son las únicas cuentas que
+pueden recuperar la contraseña por mail. A las sintéticas de los vendedores no
+les llega nada, y el reseteo hay que hacerlo desde el panel de Supabase.
 
 ### 6. Dar de alta a los vendedores
 
