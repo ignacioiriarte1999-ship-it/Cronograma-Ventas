@@ -22,34 +22,36 @@ import { toISO, fromISO, addDays, formatShort, agruparPorSemanaDesde } from './u
 
 export const CC_VENDS = ['Imbaud', 'Ortiz', 'De Santis'];
 
-// Semanas verificadas contra las capturas reales del 03/08, 10/08 y 17/08.
+// Semanas tomadas del cronograma real (Excel Jul 2026 – Ene 2027).
 // El generador respeta estos valores exactos y el detector no las cuestiona.
+// Reemplazaron a una versión anterior que venía de capturas de pantalla y
+// discrepaba del Excel en 10 de los 17 turnos de estas tres semanas.
 export const CC_SEMANAS_FIJAS = {
   // 03/08 al 08/08 — cierra De Santis
   '2026-08-03': {
-    '2026-08-03': { manana: 'Imbaud',    tarde: 'Ortiz' },
-    '2026-08-04': { manana: 'Ortiz',     tarde: 'De Santis' },
-    '2026-08-05': { manana: 'Ortiz',     tarde: 'De Santis' },
-    '2026-08-06': { manana: 'Imbaud',    tarde: 'De Santis' },
-    '2026-08-07': { manana: 'Ortiz',     tarde: 'Imbaud' },
-    '2026-08-08': { manana: 'De Santis', tarde: null },
+    '2026-08-03': { manana: 'Imbaud',     tarde: 'Ortiz' },
+    '2026-08-04': { manana: 'De Santis',  tarde: 'Ortiz' },
+    '2026-08-05': { manana: 'De Santis',  tarde: 'Ortiz' },
+    '2026-08-06': { manana: 'De Santis',  tarde: 'Imbaud' },
+    '2026-08-07': { manana: 'Imbaud',     tarde: 'Ortiz' },
+    '2026-08-08': { manana: 'De Santis',  tarde: null },
   },
   // 10/08 al 15/08 — cierra Imbaud
   '2026-08-10': {
-    '2026-08-10': { manana: 'De Santis', tarde: 'Ortiz' },
-    '2026-08-11': { manana: 'Imbaud',    tarde: 'Ortiz' },
-    '2026-08-12': { manana: 'De Santis', tarde: 'Ortiz' },
-    '2026-08-13': { manana: 'De Santis', tarde: 'Imbaud' },
-    '2026-08-14': { manana: 'De Santis', tarde: 'Ortiz' },
-    '2026-08-15': { manana: 'Imbaud',    tarde: null },
+    '2026-08-10': { manana: 'De Santis',  tarde: 'Imbaud' },
+    '2026-08-11': { manana: 'Imbaud',     tarde: 'Ortiz' },
+    '2026-08-12': { manana: 'De Santis',  tarde: 'Ortiz' },
+    '2026-08-13': { manana: 'De Santis',  tarde: 'Ortiz' },
+    '2026-08-14': { manana: 'De Santis',  tarde: 'Ortiz' },
+    '2026-08-15': { manana: 'Imbaud',     tarde: null },
   },
-  // 17/08 al 22/08 — lunes feriado, cierra Ortiz
+  // 17/08 al 22/08 — lunes feriado, cierra Imbaud
   '2026-08-17': {
-    '2026-08-18': { manana: 'Imbaud', tarde: 'De Santis' },
-    '2026-08-19': { manana: 'Ortiz',  tarde: 'De Santis' },
-    '2026-08-20': { manana: 'Ortiz',  tarde: 'Imbaud' },
-    '2026-08-21': { manana: 'Ortiz',  tarde: 'De Santis' },
-    '2026-08-22': { manana: 'Ortiz',  tarde: null },
+    '2026-08-18': { manana: 'De Santis',  tarde: 'Ortiz' },
+    '2026-08-19': { manana: 'De Santis',  tarde: 'Ortiz' },
+    '2026-08-20': { manana: 'Ortiz',      tarde: 'Imbaud' },
+    '2026-08-21': { manana: 'Imbaud',     tarde: 'De Santis' },
+    '2026-08-22': { manana: 'Imbaud',     tarde: null },
   },
 };
 
