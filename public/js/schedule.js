@@ -82,6 +82,13 @@ export function crearModulo(config) {
       })).reverse();
 
       this.revisiones = Object.fromEntries(revs.data.map((r) => [r.lunes, r.firma]));
+
+      console.info(`[${this.id}] cargado —`, {
+        vendedores: vend.data.length,
+        turnos: turnos.data.length,
+        feriados: feriados.data.length,
+        historial: hist.data.length,
+      });
       return true;
     },
 
@@ -243,6 +250,14 @@ export function crearModulo(config) {
 
     /** Descarta todo y vuelve a aplicar las reglas por defecto. */
     async regenerar() {
+      // Sin el padrón cargado no hay a quién asignarle los turnos, y el
+      // resultado sería un cronograma vacío sin ningún aviso.
+      if (this._idPorNombre.size === 0) {
+        alert(`No hay vendedores cargados para ${this.nombre}.\n\n`
+          + 'Falta correr supabase/schema.sql en el SQL Editor: es el que siembra el padrón.');
+        return;
+      }
+
       const nuevo = this.generar(this.feriados);
       this.cronograma = nuevo;
       this.revisiones = {};
