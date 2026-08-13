@@ -54,19 +54,15 @@ sí solas. Lo que protege los datos son las policies RLS. **Nunca** pongas acá 
 
 **Authentication → Users → Add user**
 
-- Email: `admin@cronograma.local`
+- Email: `admin@cronograma.local` — el nombre antes de la `@` es el usuario
+  con el que vas a entrar. Si preferís `ignacio`, poné `ignacio@cronograma.local`.
 - Contraseña: la que elijas (mínimo 6 caracteres)
 - Marcá **Auto Confirm User**
 
-Copiá el **User UID**, y en **SQL Editor** corré esto reemplazándolo:
-
-```sql
-insert into perfiles (id, usuario, rol, pass_cambiada)
-values ('PEGAR_EL_UID_ACA', 'admin', 'admin', true);
-```
-
-Este paso va a mano porque es el único que la app no puede hacer sola: sin un
-admin existente, las policies no le dan permiso a nadie para crear el primero.
+Listo, ya es admin: un trigger del schema convierte en administrador al primer
+usuario que se dé de alta, porque hasta que exista uno las policies no
+autorizan a nadie a crear el primero. A partir de ahí el trigger no vuelve a
+actuar y las altas siguientes salen por la app.
 
 ### 6. Dar de alta a los vendedores
 

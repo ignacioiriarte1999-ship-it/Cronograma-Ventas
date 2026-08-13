@@ -182,6 +182,36 @@ create trigger proteger_perfil_trg
   for each row execute function proteger_perfil();
 
 -- ------------------------------------------------------------
+--  ARRANQUE EN FRÍO: EL PRIMER USUARIO ES EL ADMIN
+-- ------------------------------------------------------------
+-- Sin esto habría un huevo y la gallina: las policies sólo dejan crear
+-- perfiles a un admin, pero al principio no existe ninguno. En vez de pedir
+-- que se inserte a mano copiando el UID, el primer usuario que se dé de alta
+-- en Authentication se convierte en admin automáticamente.
+--
+-- Sólo actúa mientras perfiles está vacía: en cuanto hay un admin, las altas
+-- siguientes pasan por la app y este trigger no hace nada.
+
+create or replace function perfil_del_primer_usuario()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not exists (select 1 from perfiles) then
+    insert into perfiles (id, usuario, rol, pass_cambiada)
+    values (new.id, split_part(new.email, '@', 1), 'admin', true);
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists perfil_del_primer_usuario_trg on auth.users;
+create trigger perfil_del_primer_usuario_trg
+  after insert on auth.users
+  for each row execute function perfil_del_primer_usuario();
+
+-- ------------------------------------------------------------
 --  REALTIME
 -- ------------------------------------------------------------
 -- Para que un cambio del admin aparezca solo en la pantalla de todos.
