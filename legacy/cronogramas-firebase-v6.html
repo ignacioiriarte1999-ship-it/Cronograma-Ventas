@@ -1,0 +1,1767 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Cronogramas — ContacCenter · Laprida 235</title>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+<style>
+  :root {
+    --bg: #0d1017; --surface: #171b25; --card: #1e2330; --border: #2b3040;
+    --text: #e6e9f2; --muted: #7d8399;
+    --accent: #6c63ff; --accent2: #ff6bd6;
+    --ok: #56d364; --warn: #fbbf24; --err: #ff6b7a;
+    --c1: #4ade80; --c2: #60a5fa; --c3: #fbbf24;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 13px; min-height: 100vh; }
+  code { font-family: 'SF Mono', Menlo, Consolas, monospace; background: rgba(108,99,255,0.12); padding: 1px 5px; border-radius: 3px; font-size: 11px; color: var(--accent); }
+
+  /* LOGIN */
+  #login-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+  .login-box { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 32px; width: 100%; max-width: 380px; }
+  .login-box h1 { font-size: 20px; margin-bottom: 4px; }
+  .login-box .sub { color: var(--muted); font-size: 12px; margin-bottom: 20px; }
+  .login-box label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 4px; margin-top: 12px; }
+  .login-box input { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 5px; padding: 9px 12px; color: var(--text); font-size: 13px; font-family: inherit; }
+  .login-box input:focus { outline: none; border-color: var(--accent); }
+  .login-box button.primary { width: 100%; margin-top: 18px; background: linear-gradient(90deg, var(--accent), var(--accent2)); border: none; color: white; padding: 10px; border-radius: 5px; cursor: pointer; font-weight: 600; font-size: 13px; font-family: inherit; }
+  .login-error { color: var(--err); font-size: 11px; margin-top: 10px; min-height: 15px; }
+  .login-hint { color: var(--muted); font-size: 10px; margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--border); line-height: 1.5; }
+
+  /* APP SHELL */
+  header.appbar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 10px 20px; display: flex; align-items: center; gap: 20px; position: sticky; top: 0; z-index: 100; }
+  header .brand { font-weight: 700; font-size: 15px; }
+  header .brand .dot { color: var(--accent); }
+  header nav.tabs { display: flex; gap: 4px; flex: 1; flex-wrap: wrap; }
+  header nav.tabs button { background: transparent; border: none; color: var(--muted); padding: 7px 14px; border-radius: 5px; cursor: pointer; font-size: 12px; font-weight: 500; font-family: inherit; }
+  header nav.tabs button:hover { color: var(--text); background: var(--card); }
+  header nav.tabs button.active { background: var(--card); color: var(--text); }
+  header .userbox { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+  header .userbox .u { color: var(--muted); }
+  header .userbox .u b { color: var(--text); }
+  header .userbox button { background: transparent; border: 1px solid var(--border); color: var(--muted); padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; font-family: inherit; }
+  header .userbox button:hover { border-color: var(--accent); color: var(--text); }
+
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* CRONOGRAMA */
+  .cron-wrap { display: grid; grid-template-columns: 1fr 340px; gap: 16px; padding: 16px 20px; }
+  @media (max-width: 900px) { .cron-wrap { grid-template-columns: 1fr; } }
+  main.cron-main { min-width: 0; }
+  aside.cron-side { display: flex; flex-direction: column; gap: 12px; }
+  aside.cron-side .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
+  aside.cron-side h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-bottom: 10px; }
+  .cron-title { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .cron-title h1 { font-size: 18px; }
+  .cron-title .sub { color: var(--muted); font-size: 11px; margin-top: 2px; }
+
+  .semana { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 12px; overflow: hidden; }
+  .sem-header { padding: 10px 14px; background: var(--card); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 12px; }
+  .sem-header .titulo { font-weight: 600; }
+  .sem-header .badge { font-size: 10px; padding: 2px 8px; border-radius: 3px; margin-left: 6px; background: rgba(120,128,160,0.2); color: var(--muted); }
+  .sem-header .badge.ok { background: rgba(86,211,100,0.15); color: var(--ok); }
+  .sem-header .badge.err { background: rgba(255,107,122,0.15); color: var(--err); }
+  .sem-header .badge.warn { background: rgba(251,191,36,0.15); color: var(--warn); }
+  .sem-header .badge.info { background: rgba(108,99,255,0.15); color: var(--accent); }
+
+  table.grid { width: 100%; border-collapse: collapse; font-size: 12px; }
+  table.grid th, table.grid td { border-top: 1px solid var(--border); padding: 6px 10px; text-align: left; }
+  table.grid th { background: var(--bg); color: var(--muted); font-weight: 500; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; }
+  table.grid td.dia { color: var(--muted); font-weight: 600; width: 60px; }
+  table.grid td.cell { cursor: pointer; user-select: none; }
+  table.grid td.cell.ro { cursor: default; }
+  table.grid td.cell:hover:not(.ro) { background: rgba(108,99,255,0.08); }
+  table.grid td.feriado, table.grid td.cerrado { color: var(--muted); font-style: italic; }
+  table.grid td .pill { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 11px; font-weight: 500; }
+  .pill.v0 { background: rgba(74,222,128,0.18); color: var(--c1); }
+  .pill.v1 { background: rgba(96,165,250,0.18); color: var(--c2); }
+  .pill.v2 { background: rgba(251,191,36,0.18); color: var(--c3); }
+  .pill.v3 { background: rgba(244,114,182,0.18); color: #f472b6; }
+  .pill.v4 { background: rgba(248,113,113,0.18); color: #f87171; }
+  .pill.v5 { background: rgba(52,211,153,0.18); color: #34d399; }
+  .pill.v6 { background: rgba(129,140,248,0.18); color: #818cf8; }
+  .pill.v7 { background: rgba(251,113,133,0.18); color: #fb7185; }
+  .pill.v8 { background: rgba(103,232,249,0.18); color: #67e8f9; }
+  .pill.v9 { background: rgba(251,146,60,0.18); color: #fb923c; }
+  .pill.v10 { background: rgba(167,139,250,0.18); color: #a78bfa; }
+  .pill.v11 { background: rgba(190,242,100,0.18); color: #bef264; }
+  .pill.highlight { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  .stat-row { display: flex; justify-content: space-between; padding: 5px 0; font-size: 12px; }
+  .stat-row .lbl { color: var(--muted); }
+  .stat-row .val { font-weight: 600; font-family: monospace; }
+  .stat-heading { font-weight: 600; margin: 8px 0 4px; font-size: 11px; color: var(--text); }
+
+  .btn-primary { background: var(--accent); color: white; border: none; padding: 7px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600; font-family: inherit; }
+  .btn-primary:hover { filter: brightness(1.15); }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-secondary { background: transparent; color: var(--text); border: 1px solid var(--border); padding: 6px 11px; border-radius: 4px; cursor: pointer; font-size: 12px; font-family: inherit; }
+  .btn-secondary:hover { border-color: var(--accent); }
+  .btn-ai { background: linear-gradient(90deg, var(--accent), var(--accent2)); color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600; font-family: inherit; width: 100%; }
+
+  .feriado-item { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; font-size: 11px; }
+  .feriado-item .rm { color: var(--err); cursor: pointer; background: transparent; border: none; font-family: inherit; }
+  input.txt, select.txt { background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 6px 8px; color: var(--text); font-size: 12px; font-family: inherit; width: 100%; }
+  input.txt:focus { outline: none; border-color: var(--accent); }
+
+  .historial-item { background: var(--bg); border-left: 3px solid var(--accent); padding: 7px 10px; border-radius: 4px; margin-bottom: 5px; font-size: 11px; }
+  .historial-item.aplicada { border-left-color: var(--ok); }
+  .historial-item.rechazada { border-left-color: var(--err); opacity: 0.6; }
+  .historial-item .ts { color: var(--muted); font-size: 10px; }
+  .historial-item .desc { margin-top: 3px; }
+  .historial-item .diff { margin-top: 4px; font-family: monospace; font-size: 10px; color: var(--muted); }
+  .before { color: var(--err); text-decoration: line-through; }
+  .after { color: var(--ok); }
+
+  .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 1000; display: none; align-items: center; justify-content: center; padding: 20px; }
+  .modal-backdrop.open { display: flex; }
+  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; max-width: 720px; width: 100%; max-height: 85vh; overflow-y: auto; padding: 20px; }
+  .modal h3 { margin-bottom: 14px; font-size: 15px; }
+  .modal .close-x { float: right; background: transparent; border: none; color: var(--muted); font-size: 22px; cursor: pointer; line-height: 1; font-family: inherit; }
+  .fix-item { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; margin-bottom: 8px; font-size: 12px; }
+  .fix-item.applied { border-color: var(--ok); background: rgba(86,211,100,0.06); }
+  .fix-item.rejected { border-color: var(--err); background: rgba(255,107,122,0.05); opacity: 0.6; }
+  .fix-item .regla { display: inline-block; background: rgba(108,99,255,0.15); color: var(--accent); padding: 1px 6px; border-radius: 3px; font-size: 10px; margin-right: 6px; }
+  .fix-item .cambio { margin-top: 6px; font-family: monospace; font-size: 11px; }
+  .fix-item .actions { margin-top: 8px; display: flex; gap: 6px; }
+  .fix-item .actions button { padding: 4px 10px; font-size: 11px; }
+
+  /* Vista mio */
+  .mio-header { background: linear-gradient(135deg, var(--accent), var(--accent2)); padding: 24px 20px; color: white; }
+  .mio-header h2 { font-size: 22px; margin-bottom: 4px; }
+  .mio-header p { opacity: 0.9; font-size: 13px; }
+  .mio-body { padding: 16px 20px; max-width: 900px; margin: 0 auto; }
+  .mio-next { background: var(--card); border: 1px solid var(--accent); border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+  .mio-next .lbl { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+  .mio-next .fecha { font-size: 18px; font-weight: 600; margin-top: 4px; }
+  .mio-next .turno { color: var(--accent); font-size: 14px; margin-top: 2px; }
+  .mio-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-bottom: 20px; }
+  .mio-summary .box { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; }
+  .mio-summary .box .lbl { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .mio-summary .box .val { font-size: 20px; font-weight: 600; margin-top: 4px; font-family: monospace; }
+  .mio-mes { margin-bottom: 20px; }
+  .mio-mes h3 { font-size: 14px; margin-bottom: 8px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 500; }
+  .mio-turno-row { display: grid; grid-template-columns: 130px 70px 1fr; padding: 8px 12px; border-bottom: 1px solid var(--border); align-items: center; font-size: 12px; background: var(--surface); }
+  .mio-turno-row:first-child { border-top-left-radius: 6px; border-top-right-radius: 6px; }
+  .mio-turno-row:last-child { border-bottom-left-radius: 6px; border-bottom-right-radius: 6px; }
+  .mio-turno-row.hoy { background: rgba(108,99,255,0.12); border-left: 3px solid var(--accent); }
+  .mio-turno-row.pasado { opacity: 0.5; }
+  .mio-turno-row .dia { color: var(--muted); }
+  .mio-turno-row .turno-badge { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 10px; font-weight: 600; }
+  .mio-turno-row .turno-badge.M { background: rgba(96,165,250,0.18); color: var(--c2); }
+  .mio-turno-row .turno-badge.T { background: rgba(251,191,36,0.18); color: var(--c3); }
+  .mio-turno-row .horario { color: var(--muted); font-family: monospace; font-size: 11px; }
+
+  .empty-state { text-align: center; padding: 40px 20px; color: var(--muted); font-size: 13px; }
+
+  .user-list { display: flex; flex-direction: column; gap: 6px; }
+  .user-row { display: grid; grid-template-columns: 1fr 100px 100px; gap: 8px; padding: 6px; background: var(--bg); border-radius: 4px; font-size: 11px; align-items: center; }
+  .role-tag { font-size: 9px; padding: 1px 6px; border-radius: 3px; background: var(--card); color: var(--muted); }
+  .role-tag.admin { background: rgba(255,107,122,0.15); color: var(--err); }
+  .role-tag.vend { background: rgba(96,165,250,0.15); color: var(--c2); }
+
+  hr { border: none; border-top: 1px solid var(--border); margin: 10px 0; }
+  .warn-box { background: rgba(251,191,36,0.08); border-left: 3px solid var(--warn); padding: 8px 10px; border-radius: 4px; font-size: 11px; color: var(--warn); margin-bottom: 10px; }
+  .info-box { background: rgba(108,99,255,0.08); border-left: 3px solid var(--accent); padding: 8px 10px; border-radius: 4px; font-size: 11px; margin-bottom: 10px; color: var(--text); }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-box">
+    <h1>📅 Cronogramas</h1>
+    <p class="sub">ContacCenter · Laprida 235</p>
+    <label>Usuario</label>
+    <input type="text" id="li-user" class="txt" autocomplete="username" />
+    <label>Contraseña</label>
+    <input type="password" id="li-pass" class="txt" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()" />
+    <button class="primary" onclick="doLogin()">Ingresar</button>
+    <div class="login-error" id="li-err"></div>
+    <div class="login-hint">
+      <b>Primer ingreso:</b> el usuario es tu apellido en minúsculas (ej. <code>ortiz</code>, <code>de_santis</code>, <code>de_la_rosa</code>). La contraseña por defecto es igual al usuario sin guiones bajos (ej. <code>desantis</code>). El admin es <code>admin</code>/<code>admin</code>. Cambiá tu contraseña en la primera sesión desde ⚙️.
+    </div>
+  </div>
+</div>
+
+<!-- APP SHELL -->
+<div id="app-shell" style="display:none">
+  <header class="appbar">
+    <div class="brand">📅 Cronogramas<span class="dot">.</span></div>
+    <nav class="tabs" id="tabs"></nav>
+    <div class="userbox">
+      <span id="fb-status" style="width:8px;height:8px;border-radius:50%;background:var(--muted);display:inline-block" title="Sin conexión aún"></span>
+      <span class="u">Sesión: <b id="user-info"></b></span>
+      <button onclick="mostrarConfig()">⚙️</button>
+      <button onclick="doLogout()">Salir</button>
+    </div>
+  </header>
+
+  <div id="tab-cc" class="tab-panel"></div>
+  <div id="tab-lp" class="tab-panel"></div>
+  <div id="tab-mio" class="tab-panel"></div>
+</div>
+
+<!-- MODALS -->
+<div class="modal-backdrop" id="modal-fixes">
+  <div class="modal">
+    <button class="close-x" onclick="cerrarModalFixes()">×</button>
+    <h3>Correcciones propuestas</h3>
+    <div id="modal-fixes-summary" style="color:var(--muted);font-size:12px;margin-bottom:12px"></div>
+    <div id="modal-fixes-list"></div>
+    <div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end;border-top:1px solid var(--border);padding-top:14px">
+      <button class="btn-secondary" onclick="cerrarModalFixes()">Cerrar</button>
+      <button class="btn-secondary" onclick="rechazarTodas()">Rechazar todas</button>
+      <button class="btn-primary" onclick="aplicarTodas()">Aplicar todas</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-ia">
+  <div class="modal">
+    <button class="close-x" onclick="cerrarModalIA()">×</button>
+    <h3>🤖 Resumen de la IA autónoma</h3>
+    <div id="modal-ia-body"></div>
+    <div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end;border-top:1px solid var(--border);padding-top:14px">
+      <button class="btn-primary" onclick="cerrarModalIA()">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-config">
+  <div class="modal">
+    <button class="close-x" onclick="cerrarConfig()">×</button>
+    <h3>⚙️ Configuración</h3>
+    <div id="config-body"></div>
+    <div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end;border-top:1px solid var(--border);padding-top:14px">
+      <button class="btn-primary" onclick="cerrarConfig()">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+// ============================================================
+//                          UTILIDADES
+// ============================================================
+const MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+const MESES_LARGOS = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+const DIAS = ['D','L','Ma','Mi','J','V','S'];
+const DIAS_LARGOS = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+
+function toISO(d) { return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+function fromISO(s) { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); }
+function addDays(d, n) { const r = new Date(d); r.setDate(r.getDate()+n); return r; }
+function formatShort(d) { return DIAS[d.getDay()] + ' ' + String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0'); }
+function formatLargo(d) { return DIAS_LARGOS[d.getDay()] + ', ' + d.getDate() + ' de ' + MESES_LARGOS[d.getMonth()]; }
+
+async function sha256(text) {
+  const buf = new TextEncoder().encode(text);
+  const h = await crypto.subtle.digest('SHA-256', buf);
+  return Array.from(new Uint8Array(h)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+// ============================================================
+//                       FIREBASE
+// ============================================================
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyD7raX21KVNolz7vZwo-14LysHz09sZkPk",
+  authDomain: "cronograma-ventas.firebaseapp.com",
+  databaseURL: "https://cronograma-ventas-default-rtdb.firebaseio.com",
+  projectId: "cronograma-ventas",
+  storageBucket: "cronograma-ventas.firebasestorage.app",
+  messagingSenderId: "421656156342",
+  appId: "1:421656156342:web:7d1104354fbeb541616e17",
+  measurementId: "G-85BM1TX7Q5"
+};
+
+let firebaseReady = false;
+let db = null;
+try {
+  if (typeof firebase !== 'undefined') {
+    firebase.initializeApp(FIREBASE_CONFIG);
+    db = firebase.database();
+    firebaseReady = true;
+    // Escuchar estado de conexión y reflejarlo en el header
+    db.ref('.info/connected').on('value', (snap) => {
+      const el = document.getElementById('fb-status');
+      if (!el) return;
+      if (snap.val()) {
+        el.style.background = 'var(--ok)';
+        el.title = 'Sincronizado con la nube';
+      } else {
+        el.style.background = 'var(--warn)';
+        el.title = 'Sin conexión — usando cache local';
+      }
+    });
+    console.log('✓ Firebase inicializado');
+  } else {
+    console.warn('SDK de Firebase no cargó — el HTML funcionará en modo local sin sincronización.');
+  }
+} catch (e) {
+  console.warn('Firebase no disponible:', e);
+}
+
+// ============================================================
+//                          AUTH
+// ============================================================
+const AUTH_KEY = 'crono_users_v1';
+const SESS_KEY = 'crono_sess_v1';
+
+const DEFAULT_USERS = [
+  { user: 'admin', role: 'admin', vendedor: null, cronograma: null, defPass: 'admin' },
+  { user: 'imbaud', role: 'vendedor', vendedor: 'Imbaud', cronograma: 'cc', defPass: 'imbaud' },
+  { user: 'ortiz', role: 'vendedor', vendedor: 'Ortiz', cronograma: 'cc', defPass: 'ortiz' },
+  { user: 'de_santis', role: 'vendedor', vendedor: 'De Santis', cronograma: 'cc', defPass: 'desantis' },
+  { user: 'arevalo', role: 'vendedor', vendedor: 'Arevalo', cronograma: 'lp', defPass: 'arevalo' },
+  { user: 'de_la_rosa', role: 'vendedor', vendedor: 'De la Rosa', cronograma: 'lp', defPass: 'delarosa' },
+  { user: 'diaz', role: 'vendedor', vendedor: 'Diaz', cronograma: 'lp', defPass: 'diaz' },
+  { user: 'erazo', role: 'vendedor', vendedor: 'Erazo', cronograma: 'lp', defPass: 'erazo' },
+  { user: 'juarez', role: 'vendedor', vendedor: 'Juarez', cronograma: 'lp', defPass: 'juarez' },
+  { user: 'orellana', role: 'vendedor', vendedor: 'Orellana', cronograma: 'lp', defPass: 'orellana' },
+  { user: 'quiroga', role: 'vendedor', vendedor: 'Quiroga', cronograma: 'lp', defPass: 'quiroga' },
+  { user: 'rios', role: 'vendedor', vendedor: 'Rios', cronograma: 'lp', defPass: 'rios' },
+  { user: 'santillan', role: 'vendedor', vendedor: 'Santillan', cronograma: 'lp', defPass: 'santillan' },
+  { user: 'soria', role: 'vendedor', vendedor: 'Soria', cronograma: 'lp', defPass: 'soria' },
+  { user: 'valdez', role: 'vendedor', vendedor: 'Valdez', cronograma: 'lp', defPass: 'valdez' },
+  { user: 'varas', role: 'vendedor', vendedor: 'Varas', cronograma: 'lp', defPass: 'varas' },
+];
+
+async function inicializarUsers() {
+  // Firebase primero
+  if (firebaseReady && db) {
+    try {
+      const snapshot = await db.ref('users').once('value');
+      let users = snapshot.val();
+      if (!users || Object.keys(users).length === 0) {
+        // Primera vez ever — subimos los defaults
+        users = {};
+        for (const u of DEFAULT_USERS) {
+          users[u.user] = { role: u.role, vendedor: u.vendedor, cronograma: u.cronograma, hash: await sha256(u.defPass), changed: false };
+        }
+        await db.ref('users').set(users);
+        console.log('Usuarios default subidos a Firebase');
+      }
+      localStorage.setItem(AUTH_KEY, JSON.stringify(users));
+      return users;
+    } catch (e) {
+      console.warn('Firebase users error, cae a localStorage:', e);
+    }
+  }
+  // Fallback: localStorage o defaults
+  const stored = localStorage.getItem(AUTH_KEY);
+  if (stored) { try { return JSON.parse(stored); } catch (e) {} }
+  const users = {};
+  for (const u of DEFAULT_USERS) {
+    users[u.user] = { role: u.role, vendedor: u.vendedor, cronograma: u.cronograma, hash: await sha256(u.defPass), changed: false };
+  }
+  localStorage.setItem(AUTH_KEY, JSON.stringify(users));
+  return users;
+}
+
+async function doLogin() {
+  const user = document.getElementById('li-user').value.trim().toLowerCase();
+  const pass = document.getElementById('li-pass').value;
+  const errEl = document.getElementById('li-err');
+  errEl.textContent = '';
+  if (!user || !pass) { errEl.textContent = 'Ingresá usuario y contraseña.'; return; }
+  const users = await inicializarUsers();
+  const u = users[user];
+  if (!u) { errEl.textContent = 'Usuario no encontrado.'; return; }
+  const hash = await sha256(pass);
+  if (u.hash !== hash) { errEl.textContent = 'Contraseña incorrecta.'; return; }
+  const sess = { user, role: u.role, vendedor: u.vendedor, cronograma: u.cronograma, changed: u.changed };
+  sessionStorage.setItem(SESS_KEY, JSON.stringify(sess));
+  document.getElementById('li-pass').value = '';
+  iniciarApp(sess);
+}
+function doLogout() { sessionStorage.removeItem(SESS_KEY); location.reload(); }
+function getSession() { const s = sessionStorage.getItem(SESS_KEY); if (!s) return null; try { return JSON.parse(s); } catch (e) { return null; } }
+
+async function cambiarPassword(user, nuevaPass) {
+  const hash = await sha256(nuevaPass);
+  const users = JSON.parse(localStorage.getItem(AUTH_KEY) || '{}');
+  if (!users[user]) return false;
+  users[user].hash = hash;
+  users[user].changed = true;
+  localStorage.setItem(AUTH_KEY, JSON.stringify(users));
+  if (firebaseReady && db) {
+    try { await db.ref('users/' + user).update({ hash, changed: true }); }
+    catch (e) { console.warn('FB pass update:', e); }
+  }
+  return true;
+}
+async function resetPassword(user) {
+  const def = DEFAULT_USERS.find(u => u.user === user);
+  if (!def) return false;
+  const hash = await sha256(def.defPass);
+  const users = JSON.parse(localStorage.getItem(AUTH_KEY) || '{}');
+  if (!users[user]) return false;
+  users[user].hash = hash;
+  users[user].changed = false;
+  localStorage.setItem(AUTH_KEY, JSON.stringify(users));
+  if (firebaseReady && db) {
+    try { await db.ref('users/' + user).update({ hash, changed: false }); }
+    catch (e) { console.warn('FB pass reset:', e); }
+  }
+  return true;
+}
+
+// Config
+function mostrarConfig() {
+  const sess = getSession(); if (!sess) return;
+  const body = document.getElementById('config-body');
+  let html = `
+    <div class="stat-heading">Cambiar mi contraseña</div>
+    <input class="txt" id="cfg-newpass" placeholder="Nueva contraseña" type="password" style="margin-bottom:6px" />
+    <input class="txt" id="cfg-newpass2" placeholder="Repetir contraseña" type="password" style="margin-bottom:8px" />
+    <button class="btn-primary" onclick="hacerCambioPass()">Actualizar</button>
+    <div id="cfg-msg" style="margin-top:8px;font-size:11px;min-height:14px"></div>
+  `;
+  if (sess.role === 'admin') {
+    const users = JSON.parse(localStorage.getItem(AUTH_KEY) || '{}');
+    html += `<hr><div class="stat-heading">Panel de admin — usuarios</div>
+      <div class="warn-box">Al resetear, la contraseña vuelve al valor por defecto (apellido sin guiones bajos). Recomendale al usuario cambiarla al ingresar.</div>
+      <div class="user-list">`;
+    for (const [u, data] of Object.entries(users)) {
+      const roleTag = data.role === 'admin' ? '<span class="role-tag admin">admin</span>' : '<span class="role-tag vend">vendedor</span>';
+      const label = data.vendedor ? `${u} <span style="color:var(--muted)">(${data.vendedor})</span>` : u;
+      html += `<div class="user-row">
+        <div>${label} ${roleTag}</div>
+        <div style="color:var(--muted);font-size:10px">${data.changed ? '🔒 cambiada' : '🔓 por defecto'}</div>
+        <button class="btn-secondary" style="padding:3px 8px;font-size:10px" onclick="hacerReset('${u}')">Resetear</button>
+      </div>`;
+    }
+    html += `</div>
+      <hr>
+      <div class="stat-heading">Peligro</div>
+      <button class="btn-secondary" style="border-color:var(--err);color:var(--err)" onclick="resetTodoLosCronogramas()">Regenerar ambos cronogramas desde cero</button>
+      <div style="font-size:10px;color:var(--muted);margin-top:4px">Borra todas las ediciones manuales y regenera con las reglas por defecto. El historial de correcciones se conserva.</div>`;
+  }
+  body.innerHTML = html;
+  document.getElementById('modal-config').classList.add('open');
+}
+function cerrarConfig() { document.getElementById('modal-config').classList.remove('open'); }
+async function hacerCambioPass() {
+  const sess = getSession();
+  const p1 = document.getElementById('cfg-newpass').value;
+  const p2 = document.getElementById('cfg-newpass2').value;
+  const msg = document.getElementById('cfg-msg');
+  if (!p1 || p1.length < 4) { msg.style.color = 'var(--err)'; msg.textContent = 'Mínimo 4 caracteres.'; return; }
+  if (p1 !== p2) { msg.style.color = 'var(--err)'; msg.textContent = 'No coinciden.'; return; }
+  await cambiarPassword(sess.user, p1);
+  msg.style.color = 'var(--ok)'; msg.textContent = '✓ Contraseña actualizada.';
+  document.getElementById('cfg-newpass').value = '';
+  document.getElementById('cfg-newpass2').value = '';
+}
+async function hacerReset(user) {
+  if (!confirm(`¿Resetear la contraseña de "${user}"?`)) return;
+  await resetPassword(user); mostrarConfig();
+}
+function resetTodoLosCronogramas() {
+  if (!confirm('Vas a REGENERAR ambos cronogramas desde cero. Se perderán las ediciones manuales. ¿Seguro?')) return;
+  CC.cronograma = CC.generar();
+  CC.feriados = { ...FERIADOS_DEFAULT };
+  LP.cronograma = LP.generar();
+  LP.feriados = { ...FERIADOS_DEFAULT };
+  CC.guardar(); LP.guardar();
+  CC.render(); LP.render();
+  cerrarConfig();
+}
+
+// ============================================================
+//                    CONFIG COMPARTIDA
+// ============================================================
+const INICIO_SEMESTRE = '2026-07-06';
+const FIN_SEMESTRE = '2027-01-03';
+
+const FERIADOS_DEFAULT = {
+  '2026-07-09': 'Día de la Independencia',
+  '2026-07-10': 'No laborable c/ fines turísticos',
+  '2026-08-17': 'Paso a la Inmortalidad Gral. San Martín',
+  '2026-09-24': 'Día de la Batalla de Tucumán',
+  '2026-10-12': 'Día del Respeto a la Diversidad Cultural',
+  '2026-11-23': 'Día de la Soberanía Nacional',
+  '2026-12-07': 'No laborable c/ fines turísticos',
+  '2026-12-08': 'Inmaculada Concepción de María',
+  '2026-12-25': 'Navidad',
+};
+
+function generarFechasSemestre() {
+  const fechas = [];
+  let d = fromISO(INICIO_SEMESTRE);
+  const fin = fromISO(FIN_SEMESTRE);
+  while (d <= fin) {
+    fechas.push(toISO(d));
+    d = addDays(d, 1);
+  }
+  return fechas;
+}
+
+// ============================================================
+//                    MÓDULO COMPARTIDO
+// ============================================================
+// Cada cronograma es una instancia con: id, nombre, vendedores, cronograma, feriados, historial, revisiones,
+// funciones: generar(), detectarProblemas(sem), render(), etc.
+
+function crearModulo(config) {
+  const mod = {
+    id: config.id,
+    nombre: config.nombre,
+    subtitulo: config.subtitulo,
+    direccion: config.direccion,
+    vendedores: config.vendedores,
+    cronograma: {},
+    feriados: { ...FERIADOS_DEFAULT },
+    historial: [],
+    revisiones: {},
+    pendingFixes: [],
+    generar: config.generar,
+    detectarProblemas: config.detectarProblemas,
+    reglas: config.reglas,
+
+    LS_KEY: 'crono_state_' + config.id,
+    FB_PATH: 'cronogramas/' + config.id,
+    _fbSubscribed: false,
+
+    guardar() {
+      const state = {
+        cronograma: this.cronograma,
+        feriados: this.feriados,
+        historial: this.historial.slice(-100),  // limitar histórico a los últimos 100
+        revisiones: this.revisiones
+      };
+      // Cache local (rápido, funciona offline)
+      try { localStorage.setItem(this.LS_KEY, JSON.stringify(state)); } catch (e) { console.warn('save local:', e); }
+      // Sincronizar a Firebase (solo admin puede escribir en la nube)
+      if (firebaseReady && db) {
+        const sess = getSession();
+        if (sess && sess.role === 'admin') {
+          db.ref(this.FB_PATH).set(state).catch(e => console.warn('save FB:', e));
+        }
+      }
+    },
+    cargar() {
+      // Lectura sincrónica desde localStorage (puede estar desactualizada — el listener FB la actualiza después)
+      const raw = localStorage.getItem(this.LS_KEY);
+      if (!raw) return false;
+      try {
+        const s = JSON.parse(raw);
+        if (s.cronograma) this.cronograma = s.cronograma;
+        if (s.feriados) this.feriados = s.feriados;
+        if (s.historial) this.historial = Array.isArray(s.historial) ? s.historial : Object.values(s.historial);
+        if (s.revisiones) this.revisiones = s.revisiones;
+        return true;
+      } catch (e) { return false; }
+    },
+    subscribeFirebase() {
+      if (!firebaseReady || !db || this._fbSubscribed) return;
+      this._fbSubscribed = true;
+      const self = this;
+      db.ref(this.FB_PATH).on('value', (snapshot) => {
+        const data = snapshot.val();
+        if (data && data.cronograma && Object.keys(data.cronograma).length > 0) {
+          // Recibimos datos desde la nube — actualizamos y re-renderizamos
+          self.cronograma = data.cronograma;
+          self.feriados   = data.feriados   || {};
+          self.historial  = data.historial ? (Array.isArray(data.historial) ? data.historial : Object.values(data.historial)) : [];
+          self.revisiones = data.revisiones || {};
+          try { localStorage.setItem(self.LS_KEY, JSON.stringify(data)); } catch (e) {}
+          renderTabCronograma(self);
+          // Si el vendedor está mirando "Mi horario", refrescarlo también
+          const sess = getSession();
+          if (sess && sess.cronograma === self.id) {
+            const active = document.querySelector('#tabs button.active');
+            if (active && active.getAttribute('data-tab') === 'mio') renderVistaMio();
+          }
+        } else {
+          // No hay datos en la nube — si soy admin y tengo estado local, subirlo
+          const sess = getSession();
+          if (sess && sess.role === 'admin') {
+            if (!self.cronograma || Object.keys(self.cronograma).length === 0) {
+              self.cronograma = self.generar();
+              self.feriados = { ...FERIADOS_DEFAULT };
+            }
+            self.guardar();
+            renderTabCronograma(self);
+          } else {
+            // Vendedor con nube vacía → generar defaults localmente para al menos ver algo
+            if (!self.cronograma || Object.keys(self.cronograma).length === 0) {
+              self.cronograma = self.generar();
+              self.feriados = { ...FERIADOS_DEFAULT };
+              renderTabCronograma(self);
+            }
+          }
+        }
+      }, (err) => { console.warn('FB subscribe', self.id, ':', err); });
+    },
+
+    idxVendedor(v) { return this.vendedores.indexOf(v); },
+    pillClass(v) { const i = this.idxVendedor(v); return i >= 0 ? 'v' + (i % 12) : ''; },
+
+    firmarSemana(sem) {
+      const p = [];
+      for (const iso of sem.dias) {
+        const c = this.cronograma[iso];
+        if (!c) continue;
+        if (c.holiday) p.push(iso + ':H');
+        else if (c.closed) p.push(iso + ':C');
+        else p.push(iso + ':M=' + (c.manana||'-') + '|T=' + (c.tarde||'-'));
+      }
+      return p.join('||');
+    },
+
+    // ROTACIÓN DE CELDAS (edición manual)
+    rotarCelda(iso, turno) {
+      if (!this.cronograma[iso] || this.cronograma[iso].holiday || this.cronograma[iso].closed) return;
+      const actual = this.cronograma[iso][turno];
+      const idx = actual ? this.vendedores.indexOf(actual) : -1;
+      const nuevoIdx = (idx + 1) % (this.vendedores.length + 1);
+      this.cronograma[iso][turno] = nuevoIdx < this.vendedores.length ? this.vendedores[nuevoIdx] : null;
+      this.guardar();
+      this.render();
+    },
+
+    // FERIADOS
+    agregarFeriado(iso, nombre) {
+      this.feriados[iso] = nombre;
+      if (this.cronograma[iso]) {
+        this.cronograma[iso].holiday = true;
+        this.cronograma[iso].manana = null;
+        this.cronograma[iso].tarde = null;
+      }
+      this.guardar(); this.render();
+    },
+    quitarFeriado(iso) {
+      delete this.feriados[iso];
+      if (this.cronograma[iso]) this.cronograma[iso].holiday = false;
+      // No repone asignaciones — el admin puede regenerar o editar manualmente
+      this.guardar(); this.render();
+    },
+
+    // STATS SEMANA
+    statsSemana(sem) {
+      const stats = {};
+      for (const v of this.vendedores) stats[v] = { M: 0, T: 0, S: 0, total: 0 };
+      for (const iso of sem.dias) {
+        const c = this.cronograma[iso];
+        if (!c || c.holiday || c.closed) continue;
+        const d = fromISO(iso);
+        const esSabado = d.getDay() === 6;
+        if (c.manana && stats[c.manana]) {
+          if (esSabado) stats[c.manana].S++;
+          else stats[c.manana].M++;
+          stats[c.manana].total++;
+        }
+        if (c.tarde && stats[c.tarde]) {
+          stats[c.tarde].T++; stats[c.tarde].total++;
+        }
+      }
+      return stats;
+    },
+
+    tieneFeriado(sem) {
+      return sem.dias.some(iso => this.cronograma[iso] && this.cronograma[iso].holiday);
+    },
+
+    // RENDER
+    render() {
+      renderTabCronograma(this);
+      // NOTA: no llamamos guardar() aquí — las mutaciones (rotarCelda, agregarFeriado, corrector, IA)
+      // se encargan de persistir. Evita re-escrituras innecesarias a Firebase en cada re-render.
+    },
+
+    // EXPORT CSV
+    exportarCSV() {
+      const rows = [['Fecha','Día','Mañana','Tarde','Nota']];
+      const fechas = Object.keys(this.cronograma).sort();
+      for (const iso of fechas) {
+        const c = this.cronograma[iso];
+        const d = fromISO(iso);
+        const dia = DIAS_LARGOS[d.getDay()];
+        let man = '', tar = '', nota = '';
+        if (c.holiday) { nota = 'FERIADO: ' + (this.feriados[iso]||''); }
+        else if (c.closed) { nota = 'CERRADO'; }
+        else { man = c.manana || ''; tar = c.tarde || ''; }
+        rows.push([iso, dia, man, tar, nota]);
+      }
+      const csv = rows.map(r => r.map(x => '"'+String(x).replace(/"/g,'""')+'"').join(',')).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'cronograma_' + this.id + '.csv'; a.click();
+      URL.revokeObjectURL(url);
+    }
+  };
+  return mod;
+}
+
+// ============================================================
+//                    CONTAC-CENTER
+// ============================================================
+// Reglas:
+//  - 3 vendedores: Imbaud, Ortiz, De Santis
+//  - Ciclo de 3 semanas (arranque en Tipo 2 para balancear sábados 9/9/8 en 26 semanas):
+//    Tipo 1: Abre Imbaud (L-M) — Cierra Ortiz (S-M)
+//    Tipo 2: Abre Ortiz       — Cierra De Santis
+//    Tipo 3: Abre De Santis   — Cierra Imbaud
+//  - Imbaud: 3 turnos/semana (2 mañanas + 1 tarde)
+//  - Ortiz y De Santis: 4 turnos/semana (uno de ellos suma sábado)
+//  - Sábado: solo mañana, lo cubre el cerrador del ciclo
+//  - Regla del cierre: quien cierra sábado abre lunes
+//  - Feriados: día cerrado, ciclo NO se altera
+//  - MEJORA vs cronograma original: los días específicos que Imbaud toma como 2M+1T
+//    y las combinaciones M/T de Ortiz/De Santis rotan entre 4 patrones,
+//    para que ningún vendedor quede "atado" a franjas fijas (ej. siempre viernes-mañana).
+
+const CC_VENDS = ['Imbaud', 'Ortiz', 'De Santis'];
+
+// Semanas verificadas por el usuario (capturas del 03/08, 10/08 y 17/08).
+// El generador respeta estos valores exactos y el detector no las cuestiona.
+// Cada key es el lunes de la semana; el value es un mapa {ISO_fecha: {manana, tarde, holiday?}}.
+const CC_SEMANAS_FIJAS = {
+  // Semana del 03/08 al 08/08 — Cierra De Santis
+  '2026-08-03': {
+    '2026-08-03': { manana: 'Imbaud',    tarde: 'Ortiz'     },
+    '2026-08-04': { manana: 'Ortiz',     tarde: 'De Santis' },
+    '2026-08-05': { manana: 'Ortiz',     tarde: 'De Santis' },
+    '2026-08-06': { manana: 'Imbaud',    tarde: 'De Santis' },
+    '2026-08-07': { manana: 'Ortiz',     tarde: 'Imbaud'    },
+    '2026-08-08': { manana: 'De Santis', tarde: null        }
+  },
+  // Semana del 10/08 al 15/08 — Cierra Imbaud
+  '2026-08-10': {
+    '2026-08-10': { manana: 'De Santis', tarde: 'Ortiz'     },
+    '2026-08-11': { manana: 'Imbaud',    tarde: 'Ortiz'     },
+    '2026-08-12': { manana: 'De Santis', tarde: 'Ortiz'     },
+    '2026-08-13': { manana: 'De Santis', tarde: 'Imbaud'    },
+    '2026-08-14': { manana: 'De Santis', tarde: 'Ortiz'     },
+    '2026-08-15': { manana: 'Imbaud',    tarde: null        }
+  },
+  // Semana del 17/08 al 22/08 — Feriado el lunes, cierra Ortiz
+  '2026-08-17': {
+    // Lunes feriado (ya está en FERIADOS_DEFAULT, no se sobrescribe)
+    '2026-08-18': { manana: 'Imbaud',    tarde: 'De Santis' },
+    '2026-08-19': { manana: 'Ortiz',     tarde: 'De Santis' },
+    '2026-08-20': { manana: 'Ortiz',     tarde: 'Imbaud'    },
+    '2026-08-21': { manana: 'Ortiz',     tarde: 'De Santis' },
+    '2026-08-22': { manana: 'Ortiz',     tarde: null        }
+  }
+};
+
+// Ciclo de 3 tipos (rotan cerrador entre los 3 vendedores):
+//   Tipo A: L-M Imbaud abre       ← porque cerró la sem anterior (Tipo C)
+//           S-M Ortiz cierra
+//   Tipo B: L-M Ortiz abre        ← cerró en Tipo A
+//           S-M De Santis cierra
+//   Tipo C: L-M De Santis abre    ← cerró en Tipo B
+//           S-M Imbaud cierra
+// Imbaud sigue con 3 turnos exactos = 2 mañanas + 1 tarde, contando el sábado como una mañana
+// cuando le toca cerrar. Ortiz y De Santis: 4 turnos c/u siempre.
+
+const CC_TIPOS = {
+  'A': { abre: 'Imbaud',    cierra: 'Ortiz'     },
+  'B': { abre: 'Ortiz',     cierra: 'De Santis' },
+  'C': { abre: 'De Santis', cierra: 'Imbaud'    }
+};
+
+function _ccGenerarSemana(tipo, semIdx) {
+  const { abre, cierra } = CC_TIPOS[tipo];
+  const w = [{}, {}, {}, {}, {}, {}]; // L, Ma, Mi, J, V, S
+
+  // Fijos por regla del cierre
+  w[0].manana = abre;
+  w[5].manana = cierra;
+  w[5].tarde = null;
+
+  // Imbaud: 3 turnos = 2 mañanas + 1 tarde (contando S-M como mañana si cierra)
+  // Días medios: Ma=1, Mi=2, J=3, V=4
+  if (tipo === 'A') {
+    // Imbaud ya tiene L-M. Necesita 1 mañana media + 1 tarde media.
+    const combos = [[1,2],[1,3],[1,4],[2,1],[2,3],[2,4],[3,1],[3,2],[3,4],[4,1],[4,2],[4,3]];
+    const [mM, mT] = combos[semIdx % 12];
+    w[mM].manana = 'Imbaud';
+    w[mT].tarde  = 'Imbaud';
+  } else if (tipo === 'B') {
+    // Imbaud no abre ni cierra. Necesita 2 mañanas medias + 1 tarde media.
+    const combos = [
+      [1,2,3],[1,2,4],[1,3,2],[1,3,4],[1,4,2],[1,4,3],
+      [2,3,1],[2,3,4],[2,4,1],[2,4,3],[3,4,1],[3,4,2]
+    ];
+    const [m1, m2, t] = combos[semIdx % 12];
+    w[m1].manana = 'Imbaud';
+    w[m2].manana = 'Imbaud';
+    w[t].tarde   = 'Imbaud';
+  } else { // Tipo C
+    // Imbaud ya tiene S-M (que cuenta como mañana). Necesita 1 mañana media + 1 tarde media.
+    const combos = [[1,2],[1,3],[1,4],[2,1],[2,3],[2,4],[3,1],[3,2],[3,4],[4,1],[4,2],[4,3]];
+    const [mM, mT] = combos[semIdx % 12];
+    w[mM].manana = 'Imbaud';
+    w[mT].tarde  = 'Imbaud';
+  }
+
+  // Distribuir slots restantes entre Ortiz y De Santis.
+  // Targets lun-vie (excluyendo L-M/S-M ya asignados a cerrador/abridor):
+  //   Tipo A: Ortiz cierra (S-M ya asignada, needs 3 lun-vie); DS "otro" (needs 4 lun-vie)
+  //   Tipo B: Ortiz abre (L-M asignada, needs 3 lun-vie); DS cierra (S-M asignada, needs 3 lun-vie)
+  //   Tipo C: DS abre (L-M asignada, needs 3 lun-vie); Ortiz "otro" (needs 4 lun-vie)
+  const targets = {};
+  if (tipo === 'A')      { targets['Ortiz'] = 3; targets['De Santis'] = 4; }
+  else if (tipo === 'B') { targets['Ortiz'] = 3; targets['De Santis'] = 3; }
+  else                   { targets['Ortiz'] = 4; targets['De Santis'] = 3; }
+
+  const counts = { 'Ortiz': 0, 'De Santis': 0 };
+
+  // Iterar sobre slots vacíos. Si el par del mismo día ya tiene un no-Imbaud,
+  // forzar el OPUESTO para evitar que un vendedor cubra M y T del mismo día.
+  for (let d = 0; d < 5; d++) {
+    // Mañana
+    if (!w[d].manana) {
+      const par = w[d].tarde;
+      const parNoImbaud = par && par !== 'Imbaud' ? par : null;
+      let pick;
+      if (parNoImbaud) {
+        pick = parNoImbaud === 'Ortiz' ? 'De Santis' : 'Ortiz';
+      } else {
+        const necO = targets['Ortiz'] - counts['Ortiz'];
+        const necD = targets['De Santis'] - counts['De Santis'];
+        if (necO > necD) pick = 'Ortiz';
+        else if (necD > necO) pick = 'De Santis';
+        else pick = (semIdx + d) % 2 === 0 ? 'Ortiz' : 'De Santis';
+      }
+      w[d].manana = pick;
+      counts[pick]++;
+    }
+    // Tarde
+    if (!w[d].tarde) {
+      const par = w[d].manana;
+      const parNoImbaud = par && par !== 'Imbaud' ? par : null;
+      let pick;
+      if (parNoImbaud) {
+        pick = parNoImbaud === 'Ortiz' ? 'De Santis' : 'Ortiz';
+      } else {
+        const necO = targets['Ortiz'] - counts['Ortiz'];
+        const necD = targets['De Santis'] - counts['De Santis'];
+        if (necO > necD) pick = 'Ortiz';
+        else if (necD > necO) pick = 'De Santis';
+        else pick = (semIdx + d) % 2 === 0 ? 'De Santis' : 'Ortiz';
+      }
+      w[d].tarde = pick;
+      counts[pick]++;
+    }
+  }
+
+  return w;
+}
+
+function _ccGenerar() {
+  const cronograma = {};
+  const fechas = generarFechasSemestre();
+  // Inicializar todas las fechas
+  for (const iso of fechas) {
+    const d = fromISO(iso);
+    cronograma[iso] = { manana: null, tarde: null, holiday: false, closed: false };
+    if (d.getDay() === 0) cronograma[iso].closed = true; // Domingo
+    if (FERIADOS_DEFAULT[iso]) cronograma[iso].holiday = true;
+  }
+  // Agrupar por semanas
+  const semanas = agruparPorSemanaDesde(fechas);
+  // Ciclo de 3 semanas: rota cerrador entre Ortiz, De Santis, Imbaud
+  // 26 semanas → ~9 sábados c/u (9/9/8, distribuido según arranque)
+  const tiposOrden = ['A', 'B', 'C'];
+  for (let i = 0; i < semanas.length; i++) {
+    const sem = semanas[i];
+    // Si esta semana está en las verificadas, aplicar sus valores exactos
+    if (CC_SEMANAS_FIJAS[sem.lunes]) {
+      const fija = CC_SEMANAS_FIJAS[sem.lunes];
+      for (const iso of Object.keys(fija)) {
+        if (!cronograma[iso]) continue;
+        if (cronograma[iso].holiday) continue;
+        cronograma[iso].manana = fija[iso].manana || null;
+        cronograma[iso].tarde  = fija[iso].tarde  || null;
+      }
+      continue;
+    }
+    const tipo = tiposOrden[i % 3];
+    const w = _ccGenerarSemana(tipo, i); // semIdx para rotar combos de Imbaud cada semana
+    // Mapear días w[0..5] a fechas ISO (lunes..sábado)
+    const lunes = fromISO(sem.lunes);
+    for (let d = 0; d < 6; d++) {
+      const iso = toISO(addDays(lunes, d));
+      if (!cronograma[iso]) continue;
+      if (cronograma[iso].holiday) continue; // No sobreescribir feriado
+      cronograma[iso].manana = w[d].manana || null;
+      cronograma[iso].tarde = w[d].tarde || null;
+    }
+  }
+  return cronograma;
+}
+
+function agruparPorSemanaDesde(fechas) {
+  // Agrupa fechas ISO en semanas L-D
+  const sem = [];
+  let actual = null;
+  for (const iso of fechas) {
+    const d = fromISO(iso);
+    if (d.getDay() === 1) { // Lunes
+      if (actual) sem.push(actual);
+      actual = { lunes: iso, dias: [iso] };
+    } else if (actual) {
+      actual.dias.push(iso);
+    }
+  }
+  if (actual) sem.push(actual);
+  return sem;
+}
+
+// CC — Detección de problemas
+// Reglas:
+//   - Imbaud siempre 3 turnos: 2 mañanas + 1 tarde. El sábado-mañana cuenta como mañana.
+//     Por tanto puede tener M=1,S=1 (semana que cierra) o M=2,S=0 (semana normal).
+//   - Ortiz y De Santis: 4 turnos c/u siempre.
+//   - Sábado rota entre los 3 (ciclo de 3 semanas).
+//   - Regla del cierre: quien cerró sábado abre lunes siguiente.
+function _ccDetectarProblemas(sem, semIdx) {
+  const issues = [];
+  if (this.tieneFeriado(sem)) return issues; // reglas relajadas en semanas con feriado
+  // Semanas verificadas por el usuario: no se cuestionan aunque no cumplan las reglas estrictas.
+  if (CC_SEMANAS_FIJAS && CC_SEMANAS_FIJAS[sem.lunes]) return issues;
+  const stats = this.statsSemana(sem);
+  const tI = stats['Imbaud'].total;
+  const tO = stats['Ortiz'].total;
+  const tD = stats['De Santis'].total;
+
+  // Regla A: Imbaud total 3, tarde=1, mañanas totales=2 (M lun-vie + S sábado)
+  if (tI !== 3) {
+    issues.push({ regla: 'A-imbaud-total', severidad: 'err',
+      descripcion: `Imbaud tiene ${tI} turnos; debe tener 3.`, autoFix: null });
+  }
+  if (stats['Imbaud'].T !== 1) {
+    issues.push({ regla: 'A-imbaud-T', severidad: 'err',
+      descripcion: `Imbaud debe tener 1 tarde (tiene ${stats['Imbaud'].T}).`,
+      autoFix: this._ccFixImbaudMT(sem, stats) });
+  }
+  const imbaudManTot = stats['Imbaud'].M + stats['Imbaud'].S;
+  if (imbaudManTot !== 2) {
+    issues.push({ regla: 'A-imbaud-M', severidad: 'err',
+      descripcion: `Imbaud debe tener 2 mañanas en la semana (tiene ${imbaudManTot}: ${stats['Imbaud'].M} lun-vie + ${stats['Imbaud'].S} sáb).`,
+      autoFix: this._ccFixImbaudMT(sem, stats) });
+  }
+
+  // Regla B: totales — Ortiz y De Santis siempre 4. Suma = 11.
+  const sumaTotal = tI + tO + tD;
+  if (sumaTotal !== 11) {
+    issues.push({ regla: 'B-suma-total', severidad: 'err',
+      descripcion: `Suma total de turnos = ${sumaTotal}; debería ser 11.`, autoFix: null });
+  }
+  if (tO !== 4) issues.push({ regla: 'B-total-ortiz', severidad: 'err',
+    descripcion: `Ortiz tiene ${tO} turnos; debería tener 4.`, autoFix: null });
+  if (tD !== 4) issues.push({ regla: 'B-total-ds', severidad: 'err',
+    descripcion: `De Santis tiene ${tD} turnos; debería tener 4.`, autoFix: null });
+
+  // Regla C: Sábado tiene un cerrador
+  const sabIso = sem.dias.find(iso => fromISO(iso).getDay() === 6);
+  if (sabIso && this.cronograma[sabIso] && !this.cronograma[sabIso].holiday) {
+    if (!this.cronograma[sabIso].manana) {
+      issues.push({ regla: 'C-sabado-vacio', severidad: 'err',
+        descripcion: `El sábado no tiene mañana asignada.`, autoFix: null });
+    }
+  }
+
+  // Regla D: Regla del cierre — quien cerró sábado abre lunes
+  // Buscar el sábado de la semana anterior
+  const lunes = fromISO(sem.lunes);
+  const sabAnt = toISO(addDays(lunes, -2));
+  const cAnt = this.cronograma[sabAnt];
+  if (cAnt && !cAnt.holiday && !cAnt.closed && cAnt.manana) {
+    const cerrador = cAnt.manana;
+    // Primer día laborable no-feriado
+    let primerIso = null;
+    for (const iso of sem.dias.slice(0, 6)) {
+      const c = this.cronograma[iso];
+      if (c && !c.holiday && !c.closed) { primerIso = iso; break; }
+    }
+    if (primerIso) {
+      const cAct = this.cronograma[primerIso];
+      if (cAct.manana && cAct.manana !== cerrador) {
+        const actual = cAct.manana;
+        const swapValido = cAct.tarde === cerrador;
+        issues.push({
+          regla: 'D-cierre', severidad: 'err',
+          descripcion: `Regla del cierre: ${cerrador} cerró sábado y debe abrir ${formatShort(fromISO(primerIso))}. Actualmente tiene ${actual} en la mañana.`,
+          autoFix: swapValido ? {
+            iso: primerIso, turno: 'manana', antes: actual, despues: cerrador,
+            swapPar: { iso: primerIso, turno: 'tarde', antes: cerrador, despues: actual }
+          } : null
+        });
+      }
+    }
+  }
+
+  return issues;
+}
+
+// Fix para Imbaud 2M+1T: buscar swap de misma día M↔T
+function _ccFixImbaudMT(sem, stats) {
+  if (stats['Imbaud'].M > 2 && stats['Imbaud'].T === 0) {
+    // Tiene 3M+0T → mover un M a T
+    for (const iso of sem.dias.slice(0, 5)) {
+      const c = this.cronograma[iso];
+      if (!c || c.holiday || c.closed) continue;
+      if (c.manana === 'Imbaud' && c.tarde && c.tarde !== 'Imbaud') {
+        return { iso, turno: 'manana', antes: 'Imbaud', despues: c.tarde,
+          swapPar: { iso, turno: 'tarde', antes: c.tarde, despues: 'Imbaud' } };
+      }
+    }
+  } else if (stats['Imbaud'].M < 2 && stats['Imbaud'].T > 0) {
+    // Tiene 1M+2T → mover un T a M
+    for (const iso of sem.dias.slice(0, 5)) {
+      const c = this.cronograma[iso];
+      if (!c || c.holiday || c.closed) continue;
+      if (c.tarde === 'Imbaud' && c.manana && c.manana !== 'Imbaud') {
+        return { iso, turno: 'tarde', antes: 'Imbaud', despues: c.manana,
+          swapPar: { iso, turno: 'manana', antes: c.manana, despues: 'Imbaud' } };
+      }
+    }
+  }
+  return null;
+}
+
+const CC = crearModulo({
+  id: 'cc',
+  nombre: 'ContacCenter',
+  subtitulo: 'Reglas: 3 vendedores · Ciclo de 3 semanas (rota sábado entre los 3) · Imbaud 3 turnos (2M+1T, sábado cuenta como mañana si le toca) · Ortiz y De Santis 4 turnos · Regla del cierre activa',
+  direccion: '',
+  vendedores: CC_VENDS,
+  generar: _ccGenerar,
+  reglas: {
+    aplicaRegla_cierre: true,
+    horarioManana: '8 a 14',
+    horarioTarde: '14 a 20'
+  }
+});
+CC.detectarProblemas = _ccDetectarProblemas;
+CC._ccFixImbaudMT = _ccFixImbaudMT;
+
+// ============================================================
+//                    LAPRIDA 235
+// ============================================================
+// Reglas:
+//  - 12 vendedores en cola cíclica.
+//  - Cada semana ocupa 11 slots (L-M, L-T, Ma-M, Ma-T, Mi-M, Mi-T, J-M, J-T, V-M, V-T, S-M).
+//  - Un vendedor descansa toda la semana (posición 12).
+//  - Rotación: cada semana la cola avanza +1 posición.
+//    Sobre 26 semanas → cada vendedor cubre cada franja ~2.17 veces (26/12).
+//  - Feriados: los slots del día feriado no se cubren; los vendedores que
+//    "hubieran" caído esos slots simplemente no trabajan esa semana.
+//  - MEJORA vs cronograma original:
+//    a) Se corrige el typo "Díaz" → "Diaz" (era la misma persona).
+//    b) Orden inicial calibrado para que Juarez cubra ~2 sábados
+//       (en el cronograma original tenía 0).
+//  - No aplica regla del cierre (mismo criterio que el cronograma original).
+
+const LP_VENDS = ['Arevalo','De la Rosa','Diaz','Erazo','Juarez','Orellana','Quiroga','Rios','Santillan','Soria','Valdez','Varas'];
+
+// Orden inicial: escogido para que Juarez (idx 4) toque S-M en semanas ~6, 18
+// Slots ordenados: 0=L-M, 1=L-T, 2=Ma-M, 3=Ma-T, 4=Mi-M, 5=Mi-T, 6=J-M, 7=J-T, 8=V-M, 9=V-T, 10=S-M, 11=REST
+// Semana 0: vendor con posInicial=0 hace L-M, vendor con posInicial=10 hace S-M, etc.
+// Semana w: vendor con posInicial=p hace slot (p + w) mod 12
+// Juarez (idx=4 en LP_VENDS) queremos que su posInicial sea tal que S-M en sem 6 y 18:
+// slot=10 → p + w ≡ 10 (mod 12) → si w=6, p=4. Si w=18, p+18=10+12k → p=4 con k=1.
+// Perfecto, si posInicial de Juarez = 4, hace S-M en semanas 6 y 18.
+// Alfabético natural nos da eso: Arevalo=0, DeLaRosa=1, Diaz=2, Erazo=3, Juarez=4, ..., Varas=11.
+
+const LP_SLOTS = [
+  { dia: 0, turno: 'manana' }, // L-M
+  { dia: 0, turno: 'tarde' },  // L-T
+  { dia: 1, turno: 'manana' }, // Ma-M
+  { dia: 1, turno: 'tarde' },  // Ma-T
+  { dia: 2, turno: 'manana' }, // Mi-M
+  { dia: 2, turno: 'tarde' },  // Mi-T
+  { dia: 3, turno: 'manana' }, // J-M
+  { dia: 3, turno: 'tarde' },  // J-T
+  { dia: 4, turno: 'manana' }, // V-M
+  { dia: 4, turno: 'tarde' },  // V-T
+  { dia: 5, turno: 'manana' }  // S-M
+  // slot 11 = descanso (no se asigna)
+];
+
+function _lpGenerar() {
+  const cronograma = {};
+  const fechas = generarFechasSemestre();
+  for (const iso of fechas) {
+    const d = fromISO(iso);
+    cronograma[iso] = { manana: null, tarde: null, holiday: false, closed: false };
+    if (d.getDay() === 0) cronograma[iso].closed = true;
+    if (FERIADOS_DEFAULT[iso]) cronograma[iso].holiday = true;
+  }
+  const semanas = agruparPorSemanaDesde(fechas);
+  for (let w = 0; w < semanas.length; w++) {
+    const sem = semanas[w];
+    const lunes = fromISO(sem.lunes);
+    for (let slot = 0; slot < 11; slot++) {
+      // Vendedor en este slot esta semana
+      // Si vendedor v tiene posInicial p, en semana w está en slot (p + w) mod 12
+      // Invertimos: quien está en slot s en semana w es el vendedor con p = (s - w + 12*100) mod 12
+      const vendedorIdx = ((slot - w) % 12 + 12) % 12;
+      const vendedor = LP_VENDS[vendedorIdx];
+      const { dia, turno } = LP_SLOTS[slot];
+      const iso = toISO(addDays(lunes, dia));
+      if (!cronograma[iso]) continue;
+      if (cronograma[iso].holiday) continue;
+      cronograma[iso][turno] = vendedor;
+    }
+  }
+  return cronograma;
+}
+
+function _lpDetectarProblemas(sem, semIdx) {
+  const issues = [];
+  // Contar cuántos días laborables (no feriado) hay en la semana
+  const diasLab = sem.dias.slice(0, 6).filter(iso => this.cronograma[iso] && !this.cronograma[iso].holiday && !this.cronograma[iso].closed);
+  // Slots esperados: 2 por cada día lun-vie + 1 por sábado
+  let slotsEsperados = 0;
+  for (const iso of diasLab) {
+    const d = fromISO(iso);
+    slotsEsperados += (d.getDay() === 6) ? 1 : 2;
+  }
+
+  // Contar slots asignados y vacíos
+  let asignados = 0, vacios = [];
+  const cuentaVendedor = {};
+  for (const v of this.vendedores) cuentaVendedor[v] = 0;
+
+  for (const iso of diasLab) {
+    const c = this.cronograma[iso];
+    const d = fromISO(iso);
+    if (d.getDay() === 6) {
+      if (c.manana) { asignados++; cuentaVendedor[c.manana] = (cuentaVendedor[c.manana]||0) + 1; }
+      else vacios.push({ iso, turno: 'manana' });
+    } else {
+      if (c.manana) { asignados++; cuentaVendedor[c.manana] = (cuentaVendedor[c.manana]||0) + 1; }
+      else vacios.push({ iso, turno: 'manana' });
+      if (c.tarde) { asignados++; cuentaVendedor[c.tarde] = (cuentaVendedor[c.tarde]||0) + 1; }
+      else vacios.push({ iso, turno: 'tarde' });
+    }
+  }
+
+  // Regla A: slots completos
+  if (vacios.length > 0) {
+    issues.push({ regla: 'A-slot-vacio', severidad: 'warn',
+      descripcion: `${vacios.length} slot(s) vacío(s) en la semana.`, autoFix: null });
+  }
+
+  // Regla B: cada vendedor aparece a lo sumo una vez por semana
+  // (con 12 vendedores y ~11 slots, cada uno hace 0 o 1 turno por semana)
+  for (const [v, n] of Object.entries(cuentaVendedor)) {
+    if (n > 1) {
+      issues.push({ regla: 'B-duplicado', severidad: 'err',
+        descripcion: `${v} aparece ${n} veces esta semana; debería ser máximo 1.`, autoFix: null });
+    }
+  }
+
+  // Regla C: nombres únicos (detecta typos como "Díaz" vs "Diaz")
+  for (const iso of diasLab) {
+    const c = this.cronograma[iso];
+    if (c.manana && !this.vendedores.includes(c.manana)) {
+      issues.push({ regla: 'C-typo', severidad: 'err',
+        descripcion: `Nombre "${c.manana}" en ${formatShort(fromISO(iso))} mañana no está en la lista de vendedores.`,
+        autoFix: null });
+    }
+    if (c.tarde && !this.vendedores.includes(c.tarde)) {
+      issues.push({ regla: 'C-typo', severidad: 'err',
+        descripcion: `Nombre "${c.tarde}" en ${formatShort(fromISO(iso))} tarde no está en la lista de vendedores.`,
+        autoFix: null });
+    }
+  }
+
+  return issues;
+}
+
+const LP = crearModulo({
+  id: 'lp',
+  nombre: 'Laprida 235',
+  subtitulo: 'Reglas: 12 vendedores en cola cíclica · rotación +1 semanal · 1 descansa por semana',
+  direccion: 'Laprida 235',
+  vendedores: LP_VENDS,
+  generar: _lpGenerar,
+  reglas: {
+    aplicaRegla_cierre: false,
+    horarioManana: '8 a 14',
+    horarioTarde: '14 a 20'
+  }
+});
+LP.detectarProblemas = _lpDetectarProblemas;
+
+// ============================================================
+//                    RENDER PRINCIPAL
+// ============================================================
+function renderTabCronograma(mod) {
+  const container = document.getElementById('tab-' + mod.id);
+  if (!container) return;
+  const sess = getSession();
+  const editable = sess && sess.role === 'admin';
+
+  const semanas = agruparPorSemanaDesde(Object.keys(mod.cronograma).sort());
+  const totalStats = {};
+  for (const v of mod.vendedores) totalStats[v] = { M: 0, T: 0, S: 0, total: 0 };
+  for (const sem of semanas) {
+    const s = mod.statsSemana(sem);
+    for (const v of mod.vendedores) {
+      totalStats[v].M += s[v].M;
+      totalStats[v].T += s[v].T;
+      totalStats[v].S += s[v].S;
+      totalStats[v].total += s[v].total;
+    }
+  }
+
+  // Sidebar HTML
+  let sideHtml = `<div class="panel">
+    <h2>Estadísticas del semestre</h2>
+    ${mod.vendedores.map(v => `
+      <div class="stat-row">
+        <span class="lbl"><span class="pill ${mod.pillClass(v)}">${v}</span></span>
+        <span class="val">${totalStats[v].total} <span style="color:var(--muted);font-weight:400;font-size:11px">(M:${totalStats[v].M} T:${totalStats[v].T} S:${totalStats[v].S})</span></span>
+      </div>
+    `).join('')}
+  </div>`;
+
+  if (editable) {
+    // Panel feriados
+    const feriadosOrdenados = Object.keys(mod.feriados).sort();
+    sideHtml += `<div class="panel">
+      <h2>Feriados (${feriadosOrdenados.length})</h2>
+      <div id="feriados-list-${mod.id}" style="max-height:200px;overflow-y:auto;margin-bottom:8px">
+        ${feriadosOrdenados.map(iso => `
+          <div class="feriado-item">
+            <span>${formatShort(fromISO(iso))} <span style="color:var(--muted)">${mod.feriados[iso]}</span></span>
+            <button class="rm" onclick="quitarFeriado('${mod.id}','${iso}')">✕</button>
+          </div>
+        `).join('') || '<div style="color:var(--muted);font-size:11px">Sin feriados</div>'}
+      </div>
+      <div style="display:flex;gap:4px">
+        <input type="date" class="txt" id="fer-fecha-${mod.id}" style="flex:1" />
+        <input type="text" class="txt" id="fer-nombre-${mod.id}" placeholder="Motivo" style="flex:1.5" />
+        <button class="btn-secondary" onclick="agregarFeriado('${mod.id}')">＋</button>
+      </div>
+    </div>`;
+
+    // Panel corrector
+    sideHtml += `<div class="panel">
+      <h2>Corrector automatizado</h2>
+      <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px">
+        <button class="btn-secondary" onclick="ejecutarCorrector('${mod.id}',false)">Revisar cambios recientes</button>
+        <button class="btn-secondary" onclick="ejecutarCorrector('${mod.id}',true)">Revisar todo el semestre</button>
+        <button class="btn-ai" onclick="ejecutarIA('${mod.id}')">🤖 IA autónoma</button>
+      </div>
+      <div style="font-size:10px;color:var(--muted)">
+        La IA aplica automáticamente las correcciones seguras y para cuando no hay más cambios posibles.
+      </div>
+    </div>`;
+
+    // Panel historial
+    const histReciente = mod.historial.slice(-8).reverse();
+    sideHtml += `<div class="panel">
+      <h2>Historial <span style="color:var(--muted);font-weight:400">(${mod.historial.length})</span></h2>
+      <div id="historial-list-${mod.id}" style="max-height:280px;overflow-y:auto">
+        ${histReciente.length === 0 ? '<div style="color:var(--muted);font-size:11px">Sin historial aún</div>' :
+          histReciente.map(h => `
+            <div class="historial-item ${h.estado}">
+              <div class="ts">${new Date(h.ts).toLocaleString('es-AR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })} — <span style="color:var(--accent)">${h.regla}</span></div>
+              <div class="desc">${h.descripcion}</div>
+              ${h.diff ? `<div class="diff"><span class="before">${h.diff.antes}</span> → <span class="after">${h.diff.despues}</span></div>` : ''}
+            </div>
+          `).join('')}
+      </div>
+      ${mod.historial.length ? '<button class="btn-secondary" style="width:100%;margin-top:8px;font-size:11px" onclick="limpiarHistorial(\''+mod.id+'\')">Limpiar historial</button>' : ''}
+    </div>`;
+
+    // Botón exportar
+    sideHtml += `<div class="panel">
+      <button class="btn-secondary" style="width:100%" onclick="${mod.id.toUpperCase()}.exportarCSV()">📥 Exportar CSV</button>
+    </div>`;
+  } else {
+    // Vendedor: mensaje explicativo
+    sideHtml += `<div class="panel">
+      <div class="info-box">Estás viendo el cronograma en modo <b>solo lectura</b>. Para ver únicamente tus turnos, andá a <b>Mi horario</b>.</div>
+    </div>`;
+  }
+
+  // Main HTML: semanas
+  let mainHtml = `<div class="cron-title">
+    <div>
+      <h1>${mod.nombre}</h1>
+      <div class="sub">${mod.subtitulo}</div>
+    </div>
+    <div style="color:var(--muted);font-size:11px">${semanas.length} semanas · ${INICIO_SEMESTRE} → ${FIN_SEMESTRE}</div>
+  </div>`;
+
+  for (let si = 0; si < semanas.length; si++) {
+    const sem = semanas[si];
+    const lunes = fromISO(sem.lunes);
+    const domingo = addDays(lunes, 6);
+    const rangoTxt = `${String(lunes.getDate()).padStart(2,'0')}/${String(lunes.getMonth()+1).padStart(2,'0')} al ${String(domingo.getDate()).padStart(2,'0')}/${String(domingo.getMonth()+1).padStart(2,'0')}`;
+    const problemas = mod.detectarProblemas(sem, si);
+    const conFeriado = mod.tieneFeriado(sem);
+
+    let badges = '';
+    if (conFeriado) badges += '<span class="badge info">feriado</span>';
+    if (problemas.length === 0) badges += '<span class="badge ok">✓ OK</span>';
+    else {
+      const errs = problemas.filter(p => p.severidad === 'err').length;
+      const warns = problemas.filter(p => p.severidad === 'warn').length;
+      if (errs) badges += `<span class="badge err">${errs} error(es)</span>`;
+      if (warns) badges += `<span class="badge warn">${warns} advertencia(s)</span>`;
+    }
+    // Info del ciclo para CC
+    let ciclo = '';
+    if (mod.id === 'cc') {
+      // Detectar si la semana está entre las verificadas por el usuario
+      if (typeof CC_SEMANAS_FIJAS !== 'undefined' && CC_SEMANAS_FIJAS[sem.lunes]) {
+        ciclo = `<span class="badge ok">✓ Verificada</span>`;
+      } else {
+        const tiposOrden = ['A', 'B', 'C'];
+        const tipo = tiposOrden[si % 3];
+        const nombres = {
+          'A': 'Abre Imbaud → Cierra Ortiz',
+          'B': 'Abre Ortiz → Cierra De Santis',
+          'C': 'Abre De Santis → Cierra Imbaud'
+        };
+        ciclo = `<span class="badge">Tipo ${tipo} — ${nombres[tipo]}</span>`;
+      }
+    }
+
+    mainHtml += `<div class="semana">
+      <div class="sem-header">
+        <div><span class="titulo">Semana ${si+1} — ${rangoTxt}</span> ${ciclo} ${badges}</div>
+      </div>
+      <table class="grid">
+        <thead><tr>
+          <th style="width:60px">Día</th>
+          <th>Mañana (${mod.reglas.horarioManana})</th>
+          <th>Tarde (${mod.reglas.horarioTarde})</th>
+        </tr></thead>
+        <tbody>`;
+
+    for (let di = 0; di < 7; di++) {
+      const iso = toISO(addDays(lunes, di));
+      const c = mod.cronograma[iso];
+      const d = addDays(lunes, di);
+      const diaLbl = `<span style="color:var(--text)">${DIAS_LARGOS[d.getDay()].slice(0,3)}</span> <span style="color:var(--muted);font-size:10px">${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}</span>`;
+
+      if (!c) {
+        mainHtml += `<tr><td class="dia">${diaLbl}</td><td colspan="2" class="cerrado">—</td></tr>`;
+        continue;
+      }
+      if (c.closed) {
+        mainHtml += `<tr><td class="dia">${diaLbl}</td><td colspan="2" class="cerrado">Cerrado (domingo)</td></tr>`;
+        continue;
+      }
+      if (c.holiday) {
+        mainHtml += `<tr><td class="dia">${diaLbl}</td><td colspan="2" class="feriado">🎉 FERIADO: ${mod.feriados[iso] || 'feriado'}</td></tr>`;
+        continue;
+      }
+      const esSabado = d.getDay() === 6;
+      const cellM = c.manana ? `<span class="pill ${mod.pillClass(c.manana)}">${c.manana}</span>` : '<span style="color:var(--muted)">—</span>';
+      const cellT = c.tarde ? `<span class="pill ${mod.pillClass(c.tarde)}">${c.tarde}</span>` : (esSabado ? '<span style="color:var(--muted);font-style:italic">solo mañana</span>' : '<span style="color:var(--muted)">—</span>');
+      const roCls = editable ? '' : 'ro';
+      const clickM = editable ? `onclick="rotarCelda('${mod.id}','${iso}','manana')"` : '';
+      const clickT = editable && !esSabado ? `onclick="rotarCelda('${mod.id}','${iso}','tarde')"` : '';
+      mainHtml += `<tr>
+        <td class="dia">${diaLbl}</td>
+        <td class="cell ${roCls}" ${clickM}>${cellM}</td>
+        <td class="cell ${roCls}" ${clickT}>${cellT}</td>
+      </tr>`;
+    }
+    mainHtml += `</tbody></table>`;
+
+    // Mostrar problemas específicos si los hay
+    if (problemas.length > 0) {
+      mainHtml += `<div style="padding:8px 14px;background:var(--bg);border-top:1px solid var(--border);font-size:11px">`;
+      for (const p of problemas) {
+        const color = p.severidad === 'err' ? 'var(--err)' : 'var(--warn)';
+        mainHtml += `<div style="color:${color};margin:2px 0"><b>[${p.regla}]</b> ${p.descripcion}</div>`;
+      }
+      mainHtml += `</div>`;
+    }
+    mainHtml += `</div>`;
+  }
+
+  container.innerHTML = `<div class="cron-wrap">
+    <main class="cron-main">${mainHtml}</main>
+    <aside class="cron-side">${sideHtml}</aside>
+  </div>`;
+}
+
+// Helpers globales invocados desde onclick
+function rotarCelda(modId, iso, turno) {
+  const mod = modId === 'cc' ? CC : LP;
+  mod.rotarCelda(iso, turno);
+}
+function agregarFeriado(modId) {
+  const mod = modId === 'cc' ? CC : LP;
+  const fecha = document.getElementById('fer-fecha-' + modId).value;
+  const nombre = document.getElementById('fer-nombre-' + modId).value.trim() || 'Feriado';
+  if (!fecha) { alert('Poné una fecha'); return; }
+  mod.agregarFeriado(fecha, nombre);
+}
+function quitarFeriado(modId, iso) {
+  const mod = modId === 'cc' ? CC : LP;
+  if (!confirm(`¿Quitar el feriado del ${formatShort(fromISO(iso))}?`)) return;
+  mod.quitarFeriado(iso);
+}
+function limpiarHistorial(modId) {
+  const mod = modId === 'cc' ? CC : LP;
+  if (!confirm('¿Borrar todo el historial de correcciones?')) return;
+  mod.historial = []; mod.render();
+}
+
+// ============================================================
+//              CORRECTOR + IA AUTÓNOMA
+// ============================================================
+let _pendingFixes = [];  // [{ modId, sem, problema }]
+let _modoIA = false;
+let _statsIA = null;
+
+function ejecutarCorrector(modId, forzarTodo) {
+  const mod = modId === 'cc' ? CC : LP;
+  const semanas = agruparPorSemanaDesde(Object.keys(mod.cronograma).sort());
+  const fixes = [];
+  let revisadas = 0, salteadas = 0;
+  for (let si = 0; si < semanas.length; si++) {
+    const sem = semanas[si];
+    const firma = mod.firmarSemana(sem);
+    const firmaAnt = mod.revisiones[sem.lunes];
+    if (!forzarTodo && firmaAnt === firma) { salteadas++; continue; }
+    revisadas++;
+    const problemas = mod.detectarProblemas(sem, si);
+    for (const p of problemas) {
+      fixes.push({ modId, sem, semIdx: si, problema: p });
+    }
+    mod.revisiones[sem.lunes] = firma;
+  }
+  mod.guardar();
+  mostrarModal(fixes, revisadas, salteadas, modId);
+}
+
+function mostrarModal(fixes, revisadas, salteadas, modId) {
+  _pendingFixes = fixes;
+  const modal = document.getElementById('modal-fixes');
+  const summary = document.getElementById('modal-fixes-summary');
+  const list = document.getElementById('modal-fixes-list');
+  summary.innerHTML = `Se revisaron <b>${revisadas}</b> semanas (${salteadas} sin cambios recientes). ` +
+    (fixes.length === 0 ? '<span style="color:var(--ok)">Sin problemas detectados. 🎉</span>' : `Se detectaron <b>${fixes.length}</b> problema(s).`);
+  if (fixes.length === 0) {
+    list.innerHTML = '';
+  } else {
+    list.innerHTML = fixes.map((f, i) => {
+      const sev = f.problema.severidad === 'err' ? 'var(--err)' : 'var(--warn)';
+      const semTxt = `Sem ${f.semIdx + 1} (${formatShort(fromISO(f.sem.lunes))})`;
+      let cambioHtml = '';
+      if (f.problema.autoFix) {
+        cambioHtml = `<div class="cambio">${formatShort(fromISO(f.problema.autoFix.iso))} ${f.problema.autoFix.turno}: <span class="before">${f.problema.autoFix.antes||'—'}</span> → <span class="after">${f.problema.autoFix.despues}</span></div>`;
+      } else {
+        cambioHtml = `<div class="cambio" style="color:var(--muted)">Sin fix automático — requiere edición manual.</div>`;
+      }
+      return `<div class="fix-item" id="fix-${i}">
+        <div><span class="regla">${f.problema.regla}</span> <span style="color:${sev};font-size:10px">${f.problema.severidad.toUpperCase()}</span> <span style="color:var(--muted);font-size:10px">${semTxt}</span></div>
+        <div style="margin-top:4px">${f.problema.descripcion}</div>
+        ${cambioHtml}
+        <div class="actions">
+          ${f.problema.autoFix ? `<button class="btn-primary" onclick="aplicarFix(${i})">Aplicar</button>` : ''}
+          <button class="btn-secondary" onclick="rechazarFix(${i})">Rechazar</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+  modal.classList.add('open');
+}
+function cerrarModalFixes() { document.getElementById('modal-fixes').classList.remove('open'); }
+
+function aplicarFix(i) {
+  const f = _pendingFixes[i];
+  if (!f || !f.problema.autoFix) return;
+  const mod = f.modId === 'cc' ? CC : LP;
+  const af = f.problema.autoFix;
+  const antes = mod.cronograma[af.iso][af.turno];
+  mod.cronograma[af.iso][af.turno] = af.despues;
+  if (af.swapPar) {
+    mod.cronograma[af.swapPar.iso][af.swapPar.turno] = af.swapPar.despues;
+  }
+  mod.historial.push({
+    ts: Date.now(), regla: f.problema.regla, estado: 'aplicada',
+    descripcion: f.problema.descripcion,
+    diff: { antes: `${formatShort(fromISO(af.iso))} ${af.turno}: ${antes||'—'}`, despues: `${af.despues}` }
+  });
+  mod.guardar();
+  const el = document.getElementById('fix-' + i);
+  if (el) el.classList.add('applied');
+  mod.render();
+}
+function rechazarFix(i) {
+  const f = _pendingFixes[i];
+  if (!f) return;
+  const mod = f.modId === 'cc' ? CC : LP;
+  mod.historial.push({
+    ts: Date.now(), regla: f.problema.regla, estado: 'rechazada',
+    descripcion: f.problema.descripcion, diff: null
+  });
+  mod.guardar();
+  const el = document.getElementById('fix-' + i);
+  if (el) el.classList.add('rejected');
+  mod.render();
+}
+function aplicarTodas() {
+  for (let i = 0; i < _pendingFixes.length; i++) {
+    if (_pendingFixes[i].problema.autoFix) aplicarFix(i);
+  }
+}
+function rechazarTodas() {
+  for (let i = 0; i < _pendingFixes.length; i++) rechazarFix(i);
+}
+
+// IA autónoma: aplica fixes hasta que no queden más o hasta 50 iters
+function ejecutarIA(modId) {
+  const mod = modId === 'cc' ? CC : LP;
+  const stats = { iters: 0, aplicadas: 0, sinFix: 0, historial: [] };
+  const MAX = 50;
+  const firmasVistas = new Set();
+  for (let iter = 0; iter < MAX; iter++) {
+    stats.iters++;
+    // Firma actual
+    const firma = JSON.stringify(mod.cronograma);
+    if (firmasVistas.has(firma)) { stats.oscilacion = true; break; }
+    firmasVistas.add(firma);
+
+    // Detectar todos los problemas
+    const semanas = agruparPorSemanaDesde(Object.keys(mod.cronograma).sort());
+    let algoAplicado = false;
+    // Priorizar por regla: D-cierre > B-imbaud > C-roles
+    const problemas = [];
+    for (let si = 0; si < semanas.length; si++) {
+      const ps = mod.detectarProblemas(semanas[si], si);
+      for (const p of ps) problemas.push({ sem: semanas[si], si, p });
+    }
+    if (problemas.length === 0) break;
+
+    // Orden de prioridad
+    const orden = ['D-cierre', 'A-imbaud-2M', 'A-imbaud-lunvie', 'B-total-imbaud', 'B-total-ortiz', 'B-total-ds', 'A-slot-vacio', 'B-duplicado', 'C-typo', 'C-sabado-vacio'];
+    problemas.sort((a, b) => {
+      const ia = orden.indexOf(a.p.regla); const ib = orden.indexOf(b.p.regla);
+      return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+    });
+
+    // Aplicar el primero con autoFix
+    for (const { p, sem, si } of problemas) {
+      if (p.autoFix) {
+        const af = p.autoFix;
+        const antes = mod.cronograma[af.iso][af.turno];
+        mod.cronograma[af.iso][af.turno] = af.despues;
+        if (af.swapPar) mod.cronograma[af.swapPar.iso][af.swapPar.turno] = af.swapPar.despues;
+        mod.historial.push({
+          ts: Date.now(), regla: p.regla + ' (IA)', estado: 'aplicada',
+          descripcion: p.descripcion,
+          diff: { antes: `${formatShort(fromISO(af.iso))} ${af.turno}: ${antes||'—'}`, despues: `${af.despues}` }
+        });
+        stats.aplicadas++;
+        algoAplicado = true;
+        break;
+      } else {
+        stats.sinFix++;
+      }
+    }
+    if (!algoAplicado) break;
+  }
+  mod.guardar();
+  mod.render();
+  mostrarResumenIA(stats, modId);
+}
+
+function mostrarResumenIA(stats, modId) {
+  const body = document.getElementById('modal-ia-body');
+  body.innerHTML = `
+    <div class="info-box">
+      La IA revisó el cronograma iterativamente aplicando reglas de mayor a menor prioridad.
+    </div>
+    <div class="stat-row"><span class="lbl">Iteraciones</span><span class="val">${stats.iters}</span></div>
+    <div class="stat-row"><span class="lbl">Correcciones aplicadas</span><span class="val" style="color:var(--ok)">${stats.aplicadas}</span></div>
+    <div class="stat-row"><span class="lbl">Problemas sin fix automático</span><span class="val" style="color:var(--warn)">${stats.sinFix}</span></div>
+    ${stats.oscilacion ? '<div class="warn-box" style="margin-top:10px">⚠️ Se detectó oscilación (la misma configuración se repitió). La IA se detuvo para evitar loop.</div>' : ''}
+    <div style="margin-top:12px;color:var(--muted);font-size:11px">Revisá el historial para ver el detalle de cada corrección aplicada.</div>
+  `;
+  document.getElementById('modal-ia').classList.add('open');
+}
+function cerrarModalIA() { document.getElementById('modal-ia').classList.remove('open'); }
+
+// ============================================================
+//                    VISTA "MI HORARIO"
+// ============================================================
+function renderVistaMio() {
+  const sess = getSession();
+  const container = document.getElementById('tab-mio');
+  if (!sess || sess.role === 'admin') {
+    container.innerHTML = `<div class="empty-state">Esta vista es para vendedores. Iniciá sesión como vendedor para ver tu horario.</div>`;
+    return;
+  }
+  const mod = sess.cronograma === 'cc' ? CC : LP;
+  const vendedor = sess.vendedor;
+
+  // Recolectar todos los turnos del vendedor
+  const turnos = []; // {iso, turno: 'manana'|'tarde', esSabado}
+  for (const iso of Object.keys(mod.cronograma).sort()) {
+    const c = mod.cronograma[iso];
+    if (!c || c.holiday || c.closed) continue;
+    if (c.manana === vendedor) turnos.push({ iso, turno: 'manana' });
+    if (c.tarde === vendedor) turnos.push({ iso, turno: 'tarde' });
+  }
+  const hoy = new Date(); hoy.setHours(0,0,0,0);
+  const hoyIso = toISO(hoy);
+  const futuros = turnos.filter(t => t.iso >= hoyIso);
+  const proximo = futuros[0];
+
+  const totM = turnos.filter(t => t.turno === 'manana' && fromISO(t.iso).getDay() !== 6).length;
+  const totT = turnos.filter(t => t.turno === 'tarde').length;
+  const totS = turnos.filter(t => t.turno === 'manana' && fromISO(t.iso).getDay() === 6).length;
+  const totFuturos = futuros.length;
+
+  let html = `<div class="mio-header">
+    <h2>Hola, ${vendedor}</h2>
+    <p>Tu horario en ${mod.nombre} · ${INICIO_SEMESTRE} → ${FIN_SEMESTRE}</p>
+  </div>
+  <div class="mio-body">`;
+
+  if (proximo) {
+    const d = fromISO(proximo.iso);
+    const hor = proximo.turno === 'manana' ? mod.reglas.horarioManana : mod.reglas.horarioTarde;
+    html += `<div class="mio-next">
+      <div class="lbl">Próximo turno</div>
+      <div class="fecha">${formatLargo(d)}</div>
+      <div class="turno">${proximo.turno === 'manana' ? 'Mañana' : 'Tarde'} · ${hor}</div>
+    </div>`;
+  } else {
+    html += `<div class="empty-state">No tenés turnos futuros programados en este período.</div>`;
+  }
+
+  html += `<div class="mio-summary">
+    <div class="box"><div class="lbl">Total turnos</div><div class="val">${turnos.length}</div></div>
+    <div class="box"><div class="lbl">Mañanas L-V</div><div class="val">${totM}</div></div>
+    <div class="box"><div class="lbl">Tardes L-V</div><div class="val">${totT}</div></div>
+    <div class="box"><div class="lbl">Sábados</div><div class="val">${totS}</div></div>
+    <div class="box"><div class="lbl">Próximos</div><div class="val">${totFuturos}</div></div>
+  </div>`;
+
+  // Agrupar por mes
+  const porMes = {};
+  for (const t of turnos) {
+    const d = fromISO(t.iso);
+    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    (porMes[key] = porMes[key] || []).push(t);
+  }
+  const mesesOrden = Object.keys(porMes).sort();
+  for (const mesKey of mesesOrden) {
+    const [y, m] = mesKey.split('-').map(Number);
+    html += `<div class="mio-mes"><h3>${MESES_LARGOS[m-1]} ${y}</h3>`;
+    for (const t of porMes[mesKey]) {
+      const d = fromISO(t.iso);
+      const esHoy = t.iso === hoyIso;
+      const esPasado = t.iso < hoyIso;
+      const cls = esHoy ? 'hoy' : (esPasado ? 'pasado' : '');
+      const turnoClass = t.turno === 'manana' ? 'M' : 'T';
+      const turnoLbl = t.turno === 'manana' ? 'Mañana' : 'Tarde';
+      const hor = t.turno === 'manana' ? mod.reglas.horarioManana : mod.reglas.horarioTarde;
+      html += `<div class="mio-turno-row ${cls}">
+        <div class="dia">${formatLargo(d)}</div>
+        <div><span class="turno-badge ${turnoClass}">${turnoLbl}</span></div>
+        <div class="horario">${hor}</div>
+      </div>`;
+    }
+    html += `</div>`;
+  }
+
+  html += `</div>`;
+  container.innerHTML = html;
+}
+
+// ============================================================
+//                    TABS + INIT
+// ============================================================
+function cambiarTab(tabId) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('#tabs button').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + tabId).classList.add('active');
+  document.querySelector(`#tabs button[data-tab="${tabId}"]`).classList.add('active');
+  if (tabId === 'mio') renderVistaMio();
+}
+
+function iniciarApp(sess) {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app-shell').style.display = 'block';
+  document.getElementById('user-info').textContent = sess.user + (sess.vendedor ? ` (${sess.vendedor})` : '') + ` — ${sess.role}`;
+
+  // Cargar cache local (rápido, puede estar desactualizado)
+  CC.cargar();
+  LP.cargar();
+
+  if (firebaseReady) {
+    // Con Firebase: suscribir. La primera respuesta va a sobreescribir con datos de la nube.
+    // Si la nube está vacía, el listener genera defaults (admin los sube).
+    CC.subscribeFirebase();
+    LP.subscribeFirebase();
+  } else {
+    // Modo offline: usar cache local o generar defaults
+    if (!CC.cronograma || Object.keys(CC.cronograma).length === 0) {
+      CC.cronograma = CC.generar();
+      CC.guardar();
+    }
+    if (!LP.cronograma || Object.keys(LP.cronograma).length === 0) {
+      LP.cronograma = LP.generar();
+      LP.guardar();
+    }
+  }
+
+  // Armar tabs según rol
+  const tabsEl = document.getElementById('tabs');
+  let tabsHtml = '';
+  let primero = null;
+  if (sess.role === 'admin') {
+    tabsHtml = `<button data-tab="cc" onclick="cambiarTab('cc')">ContacCenter</button>
+                <button data-tab="lp" onclick="cambiarTab('lp')">Laprida 235</button>`;
+    primero = 'cc';
+  } else {
+    // Vendedor: solo su cronograma + Mi horario
+    if (sess.cronograma === 'cc') {
+      tabsHtml = `<button data-tab="cc" onclick="cambiarTab('cc')">ContacCenter</button>
+                  <button data-tab="mio" onclick="cambiarTab('mio')">Mi horario</button>`;
+    } else {
+      tabsHtml = `<button data-tab="lp" onclick="cambiarTab('lp')">Laprida 235</button>
+                  <button data-tab="mio" onclick="cambiarTab('mio')">Mi horario</button>`;
+    }
+    primero = 'mio';
+  }
+  tabsEl.innerHTML = tabsHtml;
+
+  // Render inicial de ambos
+  CC.render();
+  LP.render();
+
+  // Mostrar el primer tab
+  cambiarTab(primero);
+}
+
+// Init al cargar
+window.addEventListener('DOMContentLoaded', () => {
+  const sess = getSession();
+  if (sess) {
+    iniciarApp(sess);
+  } else {
+    document.getElementById('login-screen').style.display = 'flex';
+    document.getElementById('app-shell').style.display = 'none';
+  }
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,25 @@
+# Dependencias
+node_modules/
+
+# Credenciales — NUNCA subir al repo
+*serviceAccount*.json
+*service-account*.json
+.env
+.env.*
+!.env.example
+
+# Firebase CLI
+.firebase/
+firebase-debug.log
+firestore-debug.log
+database-debug.log
+ui-debug.log
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Editores
+.vscode/
+.idea/
+*.swp

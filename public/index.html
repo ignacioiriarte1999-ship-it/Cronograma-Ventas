@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="theme-color" content="#0d1017" />
+<title>Cronogramas — ContacCenter · Laprida 235</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📅</text></svg>" />
+<link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+
+<!-- ============================ LOGIN ============================ -->
+<div id="login-screen">
+  <div class="login-box">
+    <h1>📅 Cronogramas</h1>
+    <p class="sub">ContacCenter · Laprida 235</p>
+
+    <label for="li-user">Usuario</label>
+    <input type="text" id="li-user" class="txt" autocomplete="username"
+           autocapitalize="none" spellcheck="false" />
+
+    <label for="li-pass">Contraseña</label>
+    <input type="password" id="li-pass" class="txt" autocomplete="current-password" />
+
+    <button class="primary" id="li-btn" data-accion="login">Ingresar</button>
+    <div class="login-error" id="li-err"></div>
+
+    <div class="login-hint">
+      Tu usuario es tu apellido en minúsculas (<code>ortiz</code>, <code>de_santis</code>,
+      <code>de_la_rosa</code>). Si es tu primer ingreso, usá la contraseña que te pasó el
+      administrador: te va a pedir que la cambies antes de entrar.
+    </div>
+  </div>
+</div>
+
+<!-- ============ CAMBIO DE CONTRASEÑA OBLIGATORIO ============ -->
+<div id="pass-gate">
+  <div class="login-box">
+    <h1>🔐 Elegí tu contraseña</h1>
+    <p class="sub">Es tu primer ingreso. Cambiá la contraseña inicial para continuar.</p>
+
+    <label for="pg-actual">Contraseña actual</label>
+    <input type="password" id="pg-actual" class="txt" autocomplete="current-password" />
+
+    <label for="pg-nueva">Nueva contraseña</label>
+    <input type="password" id="pg-nueva" class="txt" autocomplete="new-password" />
+
+    <label for="pg-nueva2">Repetir nueva contraseña</label>
+    <input type="password" id="pg-nueva2" class="txt" autocomplete="new-password" />
+
+    <button class="primary" id="pg-btn" data-accion="pass-gate-submit">Guardar y entrar</button>
+    <div class="form-msg" id="pg-msg"></div>
+    <div class="login-hint">
+      Mínimo 6 caracteres. Si preferís hacerlo más tarde,
+      <a href="#" data-accion="pass-gate-salir">cerrá la sesión</a>.
+    </div>
+  </div>
+</div>
+
+<!-- ============================ APP ============================ -->
+<div id="app-shell">
+  <header class="appbar">
+    <div class="brand">📅 Cronogramas<span class="dot">.</span></div>
+    <nav class="tabs" id="tabs"></nav>
+    <div class="userbox">
+      <span id="fb-status" class="conn-dot" title="Conectando…"></span>
+      <span class="u">Sesión: <b id="user-info"></b></span>
+      <button data-accion="abrir-config" title="Configuración">⚙️</button>
+      <button data-accion="logout">Salir</button>
+    </div>
+  </header>
+
+  <div id="tab-cc" class="tab-panel"></div>
+  <div id="tab-lp" class="tab-panel"></div>
+  <div id="tab-mio" class="tab-panel"></div>
+</div>
+
+<!-- ============================ MODALES ============================ -->
+<div class="modal-backdrop" id="modal-fixes">
+  <div class="modal">
+    <button class="close-x" data-accion="cerrar-fixes" aria-label="Cerrar">×</button>
+    <h3>Correcciones propuestas</h3>
+    <div id="modal-fixes-summary" class="modal-sub"></div>
+    <div id="modal-fixes-list"></div>
+    <div class="modal-footer">
+      <button class="btn-secondary" data-accion="cerrar-fixes">Cerrar</button>
+      <span id="modal-fixes-acciones" class="modal-acciones">
+        <button class="btn-secondary" data-accion="fix-rechazar-todas">Rechazar todas</button>
+        <button class="btn-primary" data-accion="fix-aplicar-todas">Aplicar todas</button>
+      </span>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-ia">
+  <div class="modal">
+    <button class="close-x" data-accion="cerrar-ia" aria-label="Cerrar">×</button>
+    <h3>⚡ Resultado de la corrección automática</h3>
+    <div id="modal-ia-body"></div>
+    <div class="modal-footer">
+      <button class="btn-primary" data-accion="cerrar-ia">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-config">
+  <div class="modal">
+    <button class="close-x" data-accion="cerrar-config" aria-label="Cerrar">×</button>
+    <h3>⚙️ Configuración</h3>
+    <div id="config-body"></div>
+    <div class="modal-footer">
+      <button class="btn-primary" data-accion="cerrar-config">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<noscript>
+  <div class="empty-state">Esta aplicación necesita JavaScript habilitado.</div>
+</noscript>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
