@@ -77,7 +77,7 @@ const COMBOS_1M_1T = [[1, 2], [1, 3], [1, 4], [2, 1], [2, 3], [2, 4],
 const COMBOS_2M_1T = [[1, 2, 3], [1, 2, 4], [1, 3, 2], [1, 3, 4], [1, 4, 2], [1, 4, 3],
   [2, 3, 1], [2, 3, 4], [2, 4, 1], [2, 4, 3], [3, 4, 1], [3, 4, 2]];
 
-function generarSemana(tipo, semIdx) {
+export function generarSemana(tipo, semIdx) {
   const { abre, cierra } = CC_TIPOS[tipo];
   const w = [{}, {}, {}, {}, {}, {}]; // L, Ma, Mi, J, V, S
 
@@ -135,8 +135,8 @@ function generarSemana(tipo, semIdx) {
   return w;
 }
 
-function generar(feriados = {}) {
-  const cronograma = esqueletoSemestre(feriados);
+function generar(feriados = {}, desde, hasta) {
+  const cronograma = esqueletoSemestre(feriados, desde, hasta);
   const semanas = agruparPorSemanaDesde(Object.keys(cronograma).sort());
 
   for (let i = 0; i < semanas.length; i++) {

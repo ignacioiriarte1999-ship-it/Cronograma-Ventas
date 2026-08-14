@@ -8,7 +8,7 @@
 
 import { sb, traducirDb } from './db.js';
 import { esAdmin, getSession } from './auth.js';
-import { esqueletoSemestre } from './periodo.js';
+import { esqueletoSemestre, rangoDeFechas } from './periodo.js';
 import { fromISO, DIAS_LARGOS } from './utils.js';
 
 const avisarError = (contexto, error) => {
@@ -28,6 +28,8 @@ export function crearModulo(config) {
 
     cronograma: {},
     feriados: {},
+    desde: null,
+    hasta: null,
     historial: [],
     revisiones: {},
 
@@ -67,10 +69,16 @@ export function crearModulo(config) {
       }
 
       this.feriados = Object.fromEntries(feriados.data.map((f) => [f.fecha, f.motivo]));
-      this.cronograma = esqueletoSemestre(this.feriados);
+
+      // El período sale de lo que hay cargado, no de una constante: así cada
+      // punto de venta muestra su propio alcance sin semanas vacías al final.
+      const fechas = turnos.data.map((t) => t.fecha).concat(feriados.data.map((f) => f.fecha));
+      [this.desde, this.hasta] = rangoDeFechas(fechas);
+
+      this.cronograma = esqueletoSemestre(this.feriados, this.desde, this.hasta);
       for (const t of turnos.data) {
         const celda = this.cronograma[t.fecha];
-        if (!celda) continue; // fuera del período configurado
+        if (!celda) continue;
         celda[t.turno] = this._nombrePorId.get(t.vendedor_id) || null;
       }
 
@@ -259,7 +267,7 @@ export function crearModulo(config) {
         return;
       }
 
-      const nuevo = this.generar(this.feriados);
+      const nuevo = this.generar(this.feriados, this.desde, this.hasta);
       this.cronograma = nuevo;
       this.revisiones = {};
       this.onCambio?.(this);

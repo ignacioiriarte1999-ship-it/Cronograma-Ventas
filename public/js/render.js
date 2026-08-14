@@ -7,19 +7,54 @@ import {
   toISO, fromISO, addDays, formatShort, formatLargo, hoyISO, esc,
   DIAS_LARGOS, MESES_LARGOS, agruparPorSemanaDesde,
 } from './utils.js';
-import { CC_SEMANAS_FIJAS, CC_TIPO_NOMBRES, tipoDeSemana } from './reglas-cc.js';
 
 const pad2 = (n) => String(n).padStart(2, '0');
 
 // ------------------------------------------------------------
 //  VISTA CRONOGRAMA
 // ------------------------------------------------------------
+// Período elegido por cronograma. Con un año y medio cargado, mostrar las
+// ~78 semanas juntas vuelve la página inusable.
+const periodoElegido = {};
+export const elegirPeriodo = (modId, clave) => { periodoElegido[modId] = clave; };
+
+const MESES_SEM = ['ene–jun', 'jul–dic'];
+const claveDe = (iso) => {
+  const d = fromISO(iso);
+  return `${d.getFullYear()}-${d.getMonth() < 6 ? 0 : 1}`;
+};
+const etiquetaDe = (clave) => {
+  const [anio, sem] = clave.split('-');
+  return `${anio} · ${MESES_SEM[Number(sem)]}`;
+};
+
+function periodosDe(semanas) {
+  const cuenta = new Map();
+  for (const s of semanas) {
+    const c = claveDe(s.lunes);
+    cuenta.set(c, (cuenta.get(c) || 0) + 1);
+  }
+  return [...cuenta.entries()].map(([clave, n]) => ({ clave, n })).sort((a, b) => a.clave.localeCompare(b.clave));
+}
+
 export function renderCronograma(mod) {
   const container = document.getElementById(`tab-${mod.id}`);
   if (!container) return;
   const editable = esAdmin();
 
-  const semanas = agruparPorSemanaDesde(Object.keys(mod.cronograma).sort());
+  const todas = agruparPorSemanaDesde(Object.keys(mod.cronograma).sort());
+  const periodos = periodosDe(todas);
+
+  // Por defecto, el período donde cae hoy; si no hay, el primero.
+  let clave = periodoElegido[mod.id];
+  if (!clave || !periodos.some((p) => p.clave === clave)) {
+    const hoyClave = claveDe(hoyISO());
+    clave = periodos.some((p) => p.clave === hoyClave) ? hoyClave : periodos[0]?.clave;
+    periodoElegido[mod.id] = clave;
+  }
+  const semanas = todas
+    .map((s, i) => ({ ...s, n: i + 1 }))
+    .filter((s) => claveDe(s.lunes) === clave);
 
   const totales = {};
   for (const v of mod.vendedores) totales[v] = { M: 0, T: 0, S: 0, total: 0 };
@@ -34,14 +69,14 @@ export function renderCronograma(mod) {
   }
 
   container.innerHTML = `<div class="cron-wrap">
-    <main class="cron-main">${htmlSemanas(mod, semanas, editable)}</main>
-    <aside class="cron-side">${htmlSidebar(mod, totales, editable)}</aside>
+    <main class="cron-main">${htmlSemanas(mod, semanas, editable, periodos, clave, todas.length)}</main>
+    <aside class="cron-side">${htmlSidebar(mod, totales, editable, clave)}</aside>
   </div>`;
 }
 
-function htmlSidebar(mod, totales, editable) {
+function htmlSidebar(mod, totales, editable, clave) {
   let html = `<div class="panel">
-    <h2>Estadísticas del semestre</h2>
+    <h2>Estadísticas de ${esc(etiquetaDe(clave))}</h2>
     ${mod.vendedores.map((v) => `
       <div class="stat-row">
         <span class="lbl"><span class="pill ${mod.pillClass(v)}">${esc(v)}</span></span>
@@ -71,7 +106,7 @@ function htmlSidebar(mod, totales, editable) {
     </div>
     <div class="feriado-form">
       <input type="date" class="txt" id="fer-fecha-${mod.id}"
-             min="${INICIO_SEMESTRE}" max="${FIN_SEMESTRE}" />
+             min="${mod.desde || INICIO_SEMESTRE}" max="${mod.hasta || FIN_SEMESTRE}" />
       <input type="text" class="txt" id="fer-nombre-${mod.id}" placeholder="Motivo" maxlength="120" />
       <button class="btn-secondary" data-accion="agregar-feriado" data-mod="${mod.id}">＋</button>
     </div>
@@ -109,14 +144,29 @@ function htmlSidebar(mod, totales, editable) {
   return html;
 }
 
-function htmlSemanas(mod, semanas, editable) {
+/** Quién abre: la mañana del primer día laborable de la semana. */
+function primerTurnoDe(mod, sem) {
+  for (const iso of sem.dias) {
+    const c = mod.cronograma[iso];
+    if (c && !c.holiday && !c.closed && c.manana) return c.manana;
+  }
+  return null;
+}
+
+function htmlSemanas(mod, semanas, editable, periodos, clave, totalSemanas) {
   const hoy = hoyISO();
+  const opciones = periodos.map((p) =>
+    `<option value="${p.clave}"${p.clave === clave ? ' selected' : ''}>${esc(etiquetaDe(p.clave))} (${p.n} sem.)</option>`
+  ).join('');
   let html = `<div class="cron-title">
     <div>
       <h1>${esc(mod.nombre)}</h1>
       <div class="sub">${esc(mod.subtitulo)}</div>
     </div>
-    <div class="muted small">${semanas.length} semanas · ${INICIO_SEMESTRE} → ${FIN_SEMESTRE}</div>
+    <div class="periodo-sel">
+      ${periodos.length > 1 ? `<select class="txt" data-accion="periodo" data-mod="${mod.id}">${opciones}</select>` : ''}
+      <div class="muted small">${semanas.length} de ${totalSemanas} semanas · ${mod.desde || INICIO_SEMESTRE} → ${mod.hasta || FIN_SEMESTRE}</div>
+    </div>
   </div>`;
 
   for (let si = 0; si < semanas.length; si++) {
@@ -141,17 +191,18 @@ function htmlSemanas(mod, semanas, editable) {
 
     let ciclo = '';
     if (mod.id === 'cc') {
-      if (CC_SEMANAS_FIJAS[sem.lunes]) {
-        ciclo = '<span class="badge ok">✓ Verificada</span>';
-      } else {
-        const t = tipoDeSemana(si);
-        ciclo = `<span class="badge">Tipo ${t} — ${CC_TIPO_NOMBRES[t]}</span>`;
+      const abre = primerTurnoDe(mod, sem);
+      const sabIso = sem.dias.find((iso) => fromISO(iso).getDay() === 6);
+      const cierra = sabIso && !mod.cronograma[sabIso]?.holiday
+        ? mod.cronograma[sabIso]?.manana : null;
+      if (abre || cierra) {
+        ciclo = `<span class="badge">Abre ${esc(abre || '—')} → Cierra ${esc(cierra || '—')}</span>`;
       }
     }
 
     html += `<div class="semana${esSemanaActual ? ' actual' : ''}" id="sem-${mod.id}-${sem.lunes}">
       <div class="sem-header">
-        <div><span class="titulo">Semana ${si + 1} — ${rango}</span> ${ciclo} ${badges}</div>
+        <div><span class="titulo">Semana ${sem.n} — ${rango}</span> ${ciclo} ${badges}</div>
       </div>
       <table class="grid">
         <thead><tr>

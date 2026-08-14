@@ -3,7 +3,7 @@
 Aplicación web para armar, corregir y publicar los cronogramas de turnos de los
 dos puntos de venta. El admin edita; cada vendedor entra y ve sólo sus turnos.
 
-- **Período**: 06/07/2026 → 03/01/2027 (26 semanas)
+- **Período**: ContacCenter 06/07/2026 → 01/01/2028 · Laprida 235 06/07/2026 → 03/01/2027
 - **Turnos**: mañana 8 a 14 · tarde 14 a 20 · sábado sólo mañana · domingo cerrado
 - **Stack**: Supabase (Postgres + Auth + Realtime) y ES modules nativos, sin build
 
@@ -150,6 +150,10 @@ Ve los dos cronogramas y puede editarlos:
   que no quedan más. Corta solo si detecta que dos reglas se pisan entre sí.
 - **Exportar CSV** para imprimir o mandar por mail.
 
+El desplegable de arriba a la derecha elige el semestre a mostrar. Cada punto de
+venta abarca exactamente lo que tiene cargado —no un período fijo—, así que
+Laprida no muestra las semanas de 2027 que todavía no existen.
+
 Todo cambio aparece al instante en la pantalla de los demás conectados, vía
 Supabase Realtime.
 
@@ -177,8 +181,19 @@ Ciclo de 3 semanas que rota quién cierra:
 
 Sobre el semestre esto da **9 / 9 / 8 sábados** para Ortiz, De Santis e Imbaud.
 
-Las semanas del **03/08, 10/08 y 17/08** están fijadas contra las capturas
-reales: el generador las respeta tal cual y el corrector no las cuestiona.
+Las semanas del **03/08, 10/08 y 17/08** están fijadas en el código contra el
+cronograma real: el generador las respeta tal cual y el corrector no las
+cuestiona.
+
+**2027 completo** (04/01/2027 al 01/01/2028) se generó continuando la rotación
+exacta: el sábado 02/01/2027 cierra Ortiz, así que la semana del 04/01 abre
+Ortiz y cierra De Santis. Auditado antes de cargar: cero violaciones a las
+reglas, cero rupturas de la regla del cierre —incluido el empalme con 2026— y
+sábados repartidos 16/16/16.
+
+Los feriados 2027 cargados son los inamovibles, Carnaval y Semana Santa. **No
+incluyen los "no laborables con fines turísticos"**, que el Gobierno fija por
+decreto cada año: agregalos desde la app cuando salgan.
 
 ### Laprida 235 — 12 vendedores
 

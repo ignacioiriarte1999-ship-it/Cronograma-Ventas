@@ -9,7 +9,7 @@ import {
 import { MIN_PASS, passInicial, PADRON } from './config.js';
 import { esc, fromISO, formatShort } from './utils.js';
 import { getModulo, listaModulos } from './modules.js';
-import { renderCronograma, renderMiHorario } from './render.js';
+import { renderCronograma, renderMiHorario, elegirPeriodo } from './render.js';
 import {
   revisar, corregirAutomatico, aplicarFix, rechazarFix, aplicarTodas, rechazarTodas,
 } from './corrector.js';
@@ -225,11 +225,7 @@ function abrirConfig() {
         completos, siempre en modo lectura.</div>
 
       <hr><div class="stat-heading">Usuarios</div>
-      <div id="cfg-usuarios" class="muted small">Cargando…</div>
-      <hr>
-      <div class="stat-heading">Zona de riesgo</div>
-      <button class="btn-secondary peligro" data-accion="regenerar">Regenerar ambos cronogramas desde cero</button>
-      <div class="muted small mt-4">Descarta todas las ediciones manuales y vuelve a aplicar las reglas por defecto. Los feriados y el historial se conservan.</div>`;
+      <div id="cfg-usuarios" class="muted small">Cargando…</div>`;
   }
 
   $('config-body').innerHTML = html;
@@ -369,12 +365,6 @@ async function hacerCrearPadron(btn) {
   }
 }
 
-async function hacerRegenerar() {
-  if (!confirm('Vas a REGENERAR ambos cronogramas desde cero.\n\nSe pierden todas las ediciones manuales. ¿Seguro?')) return;
-  $('modal-config').classList.remove('open');
-  for (const mod of listaModulos()) await mod.regenerar();
-}
-
 // ------------------------------------------------------------
 //  DELEGACIÓN DE EVENTOS
 // ------------------------------------------------------------
@@ -397,7 +387,6 @@ document.addEventListener('click', (ev) => {
     case 'cfg-pass': hacerCambioPassConfig(); break;
     case 'crear-padron': hacerCrearPadron(el); break;
     case 'crear-usuario': hacerCrearUsuario(el); break;
-    case 'regenerar': hacerRegenerar(); break;
     case 'pass-gate-submit': hacerCambioObligatorio(); break;
     case 'pass-gate-salir': logout(); break;
 
@@ -439,6 +428,14 @@ document.addEventListener('keydown', (ev) => {
   } else if (ev.key === 'Escape') {
     document.querySelectorAll('.modal-backdrop.open').forEach((m) => m.classList.remove('open'));
   }
+});
+
+// El selector de período no es un clic: necesita su propio listener.
+document.addEventListener('change', (ev) => {
+  const el = ev.target.closest('[data-accion="periodo"]');
+  if (!el) return;
+  elegirPeriodo(el.dataset.mod, el.value);
+  renderCronograma(getModulo(el.dataset.mod));
 });
 
 document.querySelectorAll('.modal-backdrop').forEach((bd) => {

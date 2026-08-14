@@ -37,8 +37,8 @@ const LP_SLOTS = [
   { dia: 5, turno: 'manana' }, // S-M
 ];
 
-function generar(feriados = {}) {
-  const cronograma = esqueletoSemestre(feriados);
+function generar(feriados = {}, desde, hasta) {
+  const cronograma = esqueletoSemestre(feriados, desde, hasta);
   const semanas = agruparPorSemanaDesde(Object.keys(cronograma).sort());
 
   for (let w = 0; w < semanas.length; w++) {
