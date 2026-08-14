@@ -17,7 +17,7 @@
 //    Ortiz y De Santis rotan entre 12 patrones, para que nadie quede atado a
 //    una franja fija (por ejemplo, siempre viernes a la mañana).
 
-import { esqueletoSemestre } from './periodo.js';
+import { esqueletoSemestre, lunesDe } from './periodo.js';
 import { toISO, fromISO, addDays, formatShort, agruparPorSemanaDesde } from './utils.js';
 
 export const CC_VENDS = ['Imbaud', 'Ortiz', 'De Santis'];
@@ -280,12 +280,65 @@ function detectarProblemas(sem) {
   return issues;
 }
 
+
+// ------------------------------------------------------------
+//  CONTINUACIÓN DEL CICLO
+// ------------------------------------------------------------
+// El tipo de la primera semana nueva no sale de un índice: sale de quién cerró
+// el último sábado cargado. Así la extensión empalma con lo que realmente pasó,
+// aunque en el camino se haya editado a mano.
+
+const tipoQueAbre = (vendedor) =>
+  Object.keys(CC_TIPOS).find((t) => CC_TIPOS[t].abre === vendedor) || null;
+
+/**
+ * Genera los turnos entre `desde` y `hasta` continuando el ciclo existente.
+ * Devuelve { fechaISO: {manana, tarde} } sólo de las fechas nuevas.
+ */
+function extender(cronograma, feriados, desde, hasta) {
+  const lunesNuevo = lunesDe(desde);
+
+  // Último sábado con cerrador antes del tramo nuevo.
+  const sabados = Object.keys(cronograma)
+    .filter((i) => i < lunesNuevo && fromISO(i).getDay() === 6).sort();
+  let cerrador = null;
+  for (let i = sabados.length - 1; i >= 0; i--) {
+    const c = cronograma[sabados[i]];
+    if (c && !c.holiday && c.manana) { cerrador = c.manana; break; }
+  }
+
+  // Quien cerró abre la semana siguiente: ese es el tipo con el que arranca.
+  const ORDEN = ['A', 'B', 'C'];
+  const inicial = tipoQueAbre(cerrador) || 'A';
+  let idx = ORDEN.indexOf(inicial);
+
+  // El contador de combos sigue contando semanas, para que los días puntuales
+  // de Imbaud no se repitan al reanudar.
+  let semIdx = Object.keys(cronograma).filter((i) => fromISO(i).getDay() === 1).length;
+
+  const nuevo = {};
+  let lunes = fromISO(lunesNuevo);
+  const fin = fromISO(hasta);
+  while (lunes <= fin) {
+    const w = generarSemana(ORDEN[idx % 3], semIdx);
+    for (let d = 0; d < 6; d++) {
+      const iso = toISO(addDays(lunes, d));
+      if (iso < desde || iso > hasta || feriados[iso]) continue;
+      nuevo[iso] = { manana: w[d].manana || null, tarde: d === 5 ? null : (w[d].tarde || null) };
+    }
+    idx++; semIdx++;
+    lunes = addDays(lunes, 7);
+  }
+  return nuevo;
+}
+
 export const CONFIG_CC = {
   id: 'cc',
   nombre: 'ContacCenter',
   subtitulo: '3 vendedores · ciclo de 3 semanas que rota el sábado · Imbaud 3 turnos (2M+1T) · Ortiz y De Santis 4 turnos · regla del cierre activa',
   vendedores: CC_VENDS,
   generar,
+  extender,
   detectarProblemas,
   reglas: {
     aplicaReglaCierre: true,

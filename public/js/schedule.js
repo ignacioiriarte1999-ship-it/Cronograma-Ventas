@@ -8,13 +8,30 @@
 
 import { sb, traducirDb } from './db.js';
 import { esAdmin, getSession } from './auth.js';
-import { esqueletoSemestre, rangoDeFechas } from './periodo.js';
-import { fromISO, DIAS_LARGOS } from './utils.js';
+import { esqueletoSemestre, rangoDeFechas, domingoDe, feriadosDelRango } from './periodo.js';
+import { toISO, fromISO, addDays, DIAS_LARGOS } from './utils.js';
 
 const avisarError = (contexto, error) => {
   console.error(contexto, error);
   alert(`${contexto}\n\n${traducirDb(error)}`);
 };
+
+/**
+ * Cuánto cronograma tiene que haber siempre por delante. Medio año permite
+ * que un vendedor planifique vacaciones sin quedarse sin datos.
+ */
+export const HORIZONTE_MINIMO_DIAS = 180;
+
+/** Hasta dónde conviene extender: fin del año que viene. */
+export const objetivoDeCobertura = () =>
+  `${new Date().getFullYear() + 1}-12-31`;
+
+/** Días de cronograma que quedan por delante. */
+export function diasRestantes(hastaISO) {
+  if (!hastaISO) return 0;
+  const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+  return Math.round((fromISO(hastaISO) - hoy) / 86400000);
+}
 
 export function crearModulo(config) {
   return {
@@ -290,6 +307,67 @@ export function crearModulo(config) {
         const { error } = await sb.from('turnos').insert(filas.slice(i, i + 200));
         if (error) { avisarError('No se pudo guardar el cronograma regenerado.', error); return; }
       }
+    },
+
+    // --------------------------------------------------------
+    //  EXTENSIÓN AUTOMÁTICA
+    // --------------------------------------------------------
+    /**
+     * Continúa el cronograma hasta `hastaISO` sin tocar lo ya cargado.
+     * La continuación se deriva de lo que hay —quién cerró el último sábado en
+     * ContacCenter, cómo quedó la cola en Laprida—, así que respeta las
+     * ediciones manuales en vez de recalcular todo desde las reglas.
+     */
+    async extenderHasta(hastaISO) {
+      if (!esAdmin()) return { ok: false, motivo: 'Sólo un administrador puede extender el cronograma.' };
+      if (!config.extender) return { ok: false, motivo: `${this.nombre} no sabe extenderse.` };
+      if (!this.hasta) return { ok: false, motivo: 'El cronograma todavía no se cargó.' };
+
+      const desde = toISO(addDays(fromISO(this.hasta), 1));
+      const hasta = domingoDe(hastaISO);
+      if (hasta <= this.hasta) return { ok: false, motivo: 'Ya está cubierto ese período.' };
+
+      // Feriados calculables del tramo nuevo, sin pisar los que ya haya.
+      const feriadosNuevos = {};
+      for (const [iso, motivo] of Object.entries(feriadosDelRango(desde, hasta))) {
+        if (!this.feriados[iso]) feriadosNuevos[iso] = motivo;
+      }
+      const feriadosTramo = { ...this.feriados, ...feriadosNuevos };
+
+      const celdas = config.extender(this.cronograma, feriadosTramo, desde, hasta, this.vendedores);
+
+      const filas = [];
+      for (const [iso, c] of Object.entries(celdas)) {
+        for (const turno of ['manana', 'tarde']) {
+          const id = c[turno] && this._idPorNombre.get(c[turno]);
+          if (id) filas.push({ punto_venta: this.id, fecha: iso, turno, vendedor_id: id });
+        }
+      }
+      if (!filas.length) return { ok: false, motivo: 'No se generó ningún turno nuevo.' };
+
+      if (Object.keys(feriadosNuevos).length) {
+        const { error } = await sb.from('feriados').upsert(
+          Object.entries(feriadosNuevos).map(([fecha, motivo]) => ({ punto_venta: this.id, fecha, motivo })),
+          { onConflict: 'punto_venta,fecha' });
+        if (error) { avisarError('No se pudieron guardar los feriados.', error); return { ok: false, motivo: traducirDb(error) }; }
+      }
+
+      // upsert y no insert: si dos admins entran a la vez, los dos calculan la
+      // misma continuación a partir de los mismos datos, así que repetirla no
+      // debe fallar ni duplicar.
+      for (let i = 0; i < filas.length; i += 200) {
+        const { error } = await sb.from('turnos')
+          .upsert(filas.slice(i, i + 200), { onConflict: 'punto_venta,fecha,turno' });
+        if (error) { avisarError('No se pudo guardar la extensión.', error); return { ok: false, motivo: traducirDb(error) }; }
+      }
+
+      await this.cargar();
+      this.onCambio?.(this);
+      return {
+        ok: true, desde, hasta,
+        turnos: filas.length,
+        feriados: Object.keys(feriadosNuevos).length,
+      };
     },
 
     // --------------------------------------------------------

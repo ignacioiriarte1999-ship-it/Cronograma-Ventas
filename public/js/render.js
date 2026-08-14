@@ -2,6 +2,7 @@
 //  RENDERIZADO
 // ============================================================
 import { getSession, esAdmin } from './auth.js';
+import { getModulo, listaModulos } from './modules.js';
 import { INICIO_SEMESTRE, FIN_SEMESTRE } from './config.js';
 import {
   toISO, fromISO, addDays, formatShort, formatLargo, hoyISO, esc,
@@ -273,13 +274,51 @@ function htmlDias(mod, lunes, editable, hoy) {
 // ------------------------------------------------------------
 //  VISTA "MI HORARIO"
 // ------------------------------------------------------------
-export function renderMiHorario(mod) {
+// Vendedor elegido a mano en "Mi horario" (admin o usuario sin vendedor propio).
+let vendedorElegido = null;
+export const elegirVendedor = (modId, nombre) => {
+  vendedorElegido = nombre ? { modId, nombre } : null;
+};
+
+/** Qué horario mostrar: el propio, o el elegido en el desplegable. */
+function objetivoMiHorario(sess) {
+  if (sess.vendedor && sess.puntoVenta) {
+    return { mod: getModulo(sess.puntoVenta), vendedor: sess.vendedor, propio: true };
+  }
+  if (vendedorElegido) {
+    return { mod: getModulo(vendedorElegido.modId), vendedor: vendedorElegido.nombre, propio: false };
+  }
+  return { mod: null, vendedor: null, propio: false };
+}
+
+function selectorVendedor(elegido) {
+  const grupos = listaModulos().map((m) => `
+    <optgroup label="${esc(m.nombre)}">
+      ${m.vendedores.map((v) => `
+        <option value="${m.id}|${esc(v)}"${elegido === v ? ' selected' : ''}>${esc(v)}</option>`).join('')}
+    </optgroup>`).join('');
+  return `<div class="mio-selector">
+    <label for="mio-vend">Ver el horario de</label>
+    <select class="txt" id="mio-vend" data-accion="elegir-vendedor">
+      <option value="">— elegí un vendedor —</option>${grupos}
+    </select>
+  </div>`;
+}
+
+export function renderMiHorario() {
   const sess = getSession();
   const container = document.getElementById('tab-mio');
   if (!container) return;
+  if (!sess) { container.innerHTML = ''; return; }
 
-  if (!sess || sess.rol === 'admin' || !mod) {
-    container.innerHTML = '<div class="empty-state">Esta vista es para vendedores.</div>';
+  const { mod, vendedor, propio } = objetivoMiHorario(sess);
+
+  if (!mod || !vendedor) {
+    container.innerHTML = `<div class="mio-header">
+        <h2>Horario por vendedor</h2>
+        <p>Elegí de quién querés ver los turnos.</p>
+      </div>
+      <div class="mio-body">${selectorVendedor(null)}</div>`;
     return;
   }
 
@@ -300,10 +339,10 @@ export function renderMiHorario(mod) {
   const totS = turnos.filter((t) => t.turno === 'manana' && fromISO(t.iso).getDay() === 6).length;
 
   let html = `<div class="mio-header">
-    <h2>Hola, ${esc(vendedor)}</h2>
-    <p>Tu horario en ${esc(mod.nombre)} · ${INICIO_SEMESTRE} → ${FIN_SEMESTRE}</p>
+    <h2>${propio ? `Hola, ${esc(vendedor)}` : esc(vendedor)}</h2>
+    <p>${propio ? 'Tu horario' : 'Horario'} en ${esc(mod.nombre)} · ${mod.desde || INICIO_SEMESTRE} → ${mod.hasta || FIN_SEMESTRE}</p>
   </div>
-  <div class="mio-body">`;
+  <div class="mio-body">${propio ? '' : selectorVendedor(vendedor)}`;
 
   if (proximo) {
     const d = fromISO(proximo.iso);

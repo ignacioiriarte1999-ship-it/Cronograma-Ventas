@@ -9,7 +9,8 @@ import {
 import { MIN_PASS, passInicial, PADRON } from './config.js';
 import { esc, fromISO, formatShort } from './utils.js';
 import { getModulo, listaModulos } from './modules.js';
-import { renderCronograma, renderMiHorario, elegirPeriodo } from './render.js';
+import { HORIZONTE_MINIMO_DIAS, objetivoDeCobertura, diasRestantes } from './schedule.js';
+import { renderCronograma, renderMiHorario, elegirPeriodo, elegirVendedor } from './render.js';
 import {
   revisar, corregirAutomatico, aplicarFix, rechazarFix, aplicarTodas, rechazarTodas,
 } from './corrector.js';
@@ -108,6 +109,70 @@ async function iniciarApp(sess) {
     mod.suscribir();
     alCambiarModulo(mod);
   }
+
+  await revisarHorizonte();
+}
+
+// ------------------------------------------------------------
+//  EXTENSIÓN AUTOMÁTICA
+// ------------------------------------------------------------
+// Cuando el cronograma se está por terminar, se continúa solo hasta fin del
+// año que viene. Sin esto, un día de enero los vendedores abren la app y no
+// tienen turnos: nadie se acuerda de generar el año nuevo con anticipación.
+
+async function revisarHorizonte() {
+  if (!esAdmin()) return;
+  const objetivo = objetivoDeCobertura();
+  const hechos = [];
+
+  for (const mod of listaModulos()) {
+    if (!mod.hasta || mod.hasta >= objetivo) continue;
+    const restan = diasRestantes(mod.hasta);
+    if (restan >= HORIZONTE_MINIMO_DIAS) continue;
+
+    console.info(`${mod.nombre}: quedan ${restan} días de cronograma, extendiendo hasta ${objetivo}…`);
+    const r = await mod.extenderHasta(objetivo);
+    if (r.ok) hechos.push({ nombre: mod.nombre, restan, ...r });
+    else console.warn(`No se extendió ${mod.nombre}: ${r.motivo}`);
+  }
+
+  if (hechos.length) mostrarAvisoExtension(hechos);
+}
+
+function mostrarAvisoExtension(hechos) {
+  $('modal-ia-titulo').textContent = '📅 Cronograma extendido';
+  $('modal-ia-body').innerHTML = `
+    <div class="info-box">Quedaba menos de medio año de cronograma cargado, así que
+    se continuó automáticamente siguiendo la rotación vigente.</div>
+    ${hechos.map((h) => `
+      <div class="stat-row">
+        <span class="lbl">${esc(h.nombre)}</span>
+        <span class="val">+${h.turnos} turnos <span class="val-detalle">hasta ${h.hasta}</span></span>
+      </div>`).join('')}
+    <div class="warn-box mt-10">Los feriados nuevos son los inamovibles, Carnaval y Semana Santa.
+    Faltan los <b>no laborables con fines turísticos</b> y los traslados, que el Gobierno fija por
+    decreto: agregalos desde el panel de feriados cuando se publiquen.</div>
+    <div class="muted small mt-12">Revisá las semanas nuevas antes de comunicarlas.</div>`;
+  $('modal-ia').classList.add('open');
+}
+
+async function hacerExtender(btn) {
+  const objetivo = objetivoDeCobertura();
+  if (!confirm(`Se va a continuar el cronograma de ambos puntos de venta hasta el ${objetivo}.\n\n`
+    + 'Lo ya cargado no se toca. ¿Continuar?')) return;
+  btn.disabled = true;
+  btn.textContent = 'Extendiendo…';
+  const hechos = [];
+  for (const mod of listaModulos()) {
+    const r = await mod.extenderHasta(objetivo);
+    if (r.ok) hechos.push({ nombre: mod.nombre, ...r });
+    else console.info(`${mod.nombre}: ${r.motivo}`);
+  }
+  btn.disabled = false;
+  btn.textContent = 'Extender hasta fin del año que viene';
+  $('modal-config').classList.remove('open');
+  if (hechos.length) mostrarAvisoExtension(hechos);
+  else alert('No hubo nada que extender: ambos cronogramas ya llegan hasta ' + objetivo + '.');
 }
 
 /** Mensaje a pantalla completa dentro de la pestaña de un cronograma. */
@@ -123,7 +188,7 @@ function avisoEnPanel(mod, titulo, detalle = '') {
 function alCambiarModulo(mod) {
   renderCronograma(mod);
   const sess = getSession();
-  if (sess && sess.puntoVenta === mod.id && tabActual === 'mio') renderMiHorario(mod);
+  if (tabActual === 'mio') renderMiHorario();
 }
 
 function armarTabs(sess) {
@@ -132,16 +197,14 @@ function armarTabs(sess) {
   let tabs;
   let inicial;
 
-  if (esAdmin()) {
-    tabs = todos;
-    inicial = 'cc';
-  } else if (propio) {
+  if (propio) {
     // Vendedor: su punto de venta y sus propios turnos.
     tabs = [{ id: propio.id, label: propio.nombre }, { id: 'mio', label: 'Mi horario' }];
     inicial = 'mio';
   } else {
-    // Sólo lectura sin vendedor asociado: ve todo, no edita nada.
-    tabs = todos;
+    // Admin o lector sin vendedor asociado: ve todo y puede consultar el
+    // horario de cualquiera desde el desplegable de "Mi horario".
+    tabs = [...todos, { id: 'mio', label: 'Horario por vendedor' }];
     inicial = 'cc';
   }
 
@@ -157,7 +220,7 @@ function cambiarTab(tabId) {
   document.querySelectorAll('#tabs button').forEach((b) => b.classList.remove('active'));
   $(`tab-${tabId}`)?.classList.add('active');
   document.querySelector(`#tabs button[data-tab="${tabId}"]`)?.classList.add('active');
-  if (tabId === 'mio') renderMiHorario(getModulo(getSession()?.puntoVenta));
+  if (tabId === 'mio') renderMiHorario();
   window.scrollTo(0, 0);
 }
 
@@ -223,6 +286,13 @@ function abrirConfig() {
       <div class="muted small mt-4">Asociá un vendedor para que además vea la pestaña
         <b>Mi horario</b> con sus propios turnos. Sin asociar, ve los dos cronogramas
         completos, siempre en modo lectura.</div>
+
+      <hr><div class="stat-heading">Cronograma</div>
+      <div class="muted small mb-8">${listaModulos().map((m) =>
+        `${esc(m.nombre)}: hasta ${m.hasta || '—'} (${diasRestantes(m.hasta)} días)`).join(' · ')}</div>
+      <button class="btn-secondary" data-accion="extender">Extender hasta fin del año que viene</button>
+      <div class="muted small mt-4">Continúa la rotación vigente sin tocar lo ya cargado.
+      La app lo hace sola cuando quedan menos de ${HORIZONTE_MINIMO_DIAS} días.</div>
 
       <hr><div class="stat-heading">Usuarios</div>
       <div id="cfg-usuarios" class="muted small">Cargando…</div>`;
@@ -387,6 +457,7 @@ document.addEventListener('click', (ev) => {
     case 'cfg-pass': hacerCambioPassConfig(); break;
     case 'crear-padron': hacerCrearPadron(el); break;
     case 'crear-usuario': hacerCrearUsuario(el); break;
+    case 'extender': hacerExtender(el); break;
     case 'pass-gate-submit': hacerCambioObligatorio(); break;
     case 'pass-gate-salir': logout(); break;
 
@@ -436,6 +507,14 @@ document.addEventListener('change', (ev) => {
   if (!el) return;
   elegirPeriodo(el.dataset.mod, el.value);
   renderCronograma(getModulo(el.dataset.mod));
+});
+
+document.addEventListener('change', (ev) => {
+  const el = ev.target.closest('[data-accion="elegir-vendedor"]');
+  if (!el) return;
+  const [modId, nombre] = el.value.split('|');
+  elegirVendedor(modId, nombre || null);
+  renderMiHorario();
 });
 
 document.querySelectorAll('.modal-backdrop').forEach((bd) => {

@@ -16,7 +16,7 @@
 //  b) El orden inicial alfabético deja a Juarez (posición 4) cubriendo el
 //     sábado en las semanas 6 y 18 — antes no le tocaba ninguno.
 
-import { esqueletoSemestre } from './periodo.js';
+import { esqueletoSemestre, lunesDe } from './periodo.js';
 import { toISO, fromISO, addDays, formatShort, agruparPorSemanaDesde } from './utils.js';
 
 export const LP_VENDS = ['Arevalo', 'De la Rosa', 'Diaz', 'Erazo', 'Juarez', 'Orellana',
@@ -112,12 +112,77 @@ function detectarProblemas(sem) {
   return issues;
 }
 
+
+// ------------------------------------------------------------
+//  CONTINUACIÓN DE LA COLA
+// ------------------------------------------------------------
+// Para extender el cronograma no se recalcula desde cero: se lee la cola real
+// de la última semana completa y se la hace avanzar. Así la continuación
+// respeta las permutas que se hayan hecho a mano en el camino.
+
+const rotar = (cola) => [cola[cola.length - 1], ...cola.slice(0, -1)];
+
+/** La cola de una semana: [slot0..slot10, quien descansa], o null si no se puede leer. */
+export function colaDeSemana(cronograma, lunesISO, vendedores) {
+  const L = fromISO(lunesISO);
+  const fila = [];
+  const vistos = new Set();
+  for (const { dia, turno } of LP_SLOTS) {
+    const c = cronograma[toISO(addDays(L, dia))];
+    if (!c || c.holiday || c.closed || !c[turno]) return null;
+    fila.push(c[turno]);
+    vistos.add(c[turno]);
+  }
+  const descansa = vendedores.filter((v) => !vistos.has(v));
+  if (descansa.length !== 1) return null;
+  return [...fila, descansa[0]];
+}
+
+/**
+ * Genera los turnos entre `desde` y `hasta` continuando la cola existente.
+ * Devuelve { fechaISO: {manana, tarde} } sólo de las fechas nuevas.
+ */
+function extender(cronograma, feriados, desde, hasta, vendedores) {
+  const lunesNuevo = lunesDe(desde);
+
+  // Última semana completa anterior, para saber en qué punto está la cola.
+  const previos = Object.keys(cronograma)
+    .filter((i) => i < lunesNuevo && fromISO(i).getDay() === 1).sort();
+  let cola = null;
+  let lunesRef = null;
+  for (let i = previos.length - 1; i >= 0; i--) {
+    cola = colaDeSemana(cronograma, previos[i], vendedores);
+    if (cola) { lunesRef = previos[i]; break; }
+  }
+  if (!cola) { cola = [...vendedores]; lunesRef = lunesNuevo; }
+
+  // Avanzar la cola hasta la primera semana nueva.
+  const semanas = Math.round((fromISO(lunesNuevo) - fromISO(lunesRef)) / 604800000);
+  for (let i = 0; i < semanas; i++) cola = rotar(cola);
+
+  const nuevo = {};
+  let lunes = fromISO(lunesNuevo);
+  const fin = fromISO(hasta);
+  while (lunes <= fin) {
+    for (let s = 0; s < LP_SLOTS.length; s++) {
+      const { dia, turno } = LP_SLOTS[s];
+      const iso = toISO(addDays(lunes, dia));
+      if (iso < desde || iso > hasta || feriados[iso]) continue;
+      (nuevo[iso] = nuevo[iso] || { manana: null, tarde: null })[turno] = cola[s];
+    }
+    cola = rotar(cola);
+    lunes = addDays(lunes, 7);
+  }
+  return nuevo;
+}
+
 export const CONFIG_LP = {
   id: 'lp',
   nombre: 'Laprida 235',
   subtitulo: '12 vendedores en cola cíclica · rotación +1 por semana · 1 descansa cada semana',
   vendedores: LP_VENDS,
   generar,
+  extender,
   detectarProblemas,
   reglas: {
     aplicaReglaCierre: false,

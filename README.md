@@ -151,11 +151,46 @@ Ve los dos cronogramas y puede editarlos:
 - **Exportar CSV** para imprimir o mandar por mail.
 
 El desplegable de arriba a la derecha elige el semestre a mostrar. Cada punto de
-venta abarca exactamente lo que tiene cargado —no un período fijo—, así que
-Laprida no muestra las semanas de 2027 que todavía no existen.
+venta abarca exactamente lo que tiene cargado, no un período fijo.
+
+**Horario por vendedor**: el admin tiene una pestaña con un desplegable para
+consultar los turnos de cualquiera de los dos locales. Los vendedores ven ahí
+los suyos, sin desplegable.
 
 Todo cambio aparece al instante en la pantalla de los demás conectados, vía
 Supabase Realtime.
+
+---
+
+## Extensión automática
+
+El cronograma se continúa solo. Cuando entra un admin y quedan **menos de 180
+días** cargados, la app extiende hasta el **31 de diciembre del año siguiente** y
+avisa con un resumen.
+
+No recalcula desde cero: **continúa la rotación vigente**, leyéndola de los datos.
+
+| | De dónde sale la continuación |
+|---|---|
+| **ContacCenter** | Quién cerró el último sábado cargado: esa persona abre el lunes siguiente, y de ahí sigue el ciclo de 3 |
+| **Laprida 235** | La cola de la última semana completa; cada uno avanza un slot por semana y el que descansaba pasa a abrir |
+
+Eso importa porque respeta las permutas hechas a mano. En los datos reales de
+Laprida, por ejemplo, la semana del 27/07 tiene un intercambio entre compañeros:
+recalcular desde las reglas lo borraría, continuar la cola lo conserva.
+
+También hay un botón manual en **⚙️ → Cronograma** para forzarlo antes de tiempo.
+
+### Feriados del año nuevo
+
+Se cargan los que se pueden calcular: los **inamovibles** y los que dependen de
+Pascua (Carnaval, Jueves y Viernes Santo), con el algoritmo gregoriano —
+verificado contra 2025, 2026, 2027 y 2028.
+
+**No se cargan los "no laborables con fines turísticos" ni los traslados de los
+feriados trasladables**: los fija el Poder Ejecutivo por decreto cada año y no
+hay forma de deducirlos. Agregalos desde el panel de feriados cuando se
+publiquen; los trasladables quedan en su fecha nominal hasta entonces.
 
 ---
 
