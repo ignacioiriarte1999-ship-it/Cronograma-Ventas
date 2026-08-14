@@ -9,7 +9,7 @@
 import { sb, traducirDb } from './db.js';
 import { esAdmin, getSession } from './auth.js';
 import { esqueletoSemestre, rangoDeFechas, domingoDe, feriadosDelRango } from './periodo.js';
-import { toISO, fromISO, addDays, DIAS_LARGOS } from './utils.js';
+import { toISO, fromISO, addDays, hoyISO, DIAS_LARGOS } from './utils.js';
 
 const avisarError = (contexto, error) => {
   console.error(contexto, error);
@@ -327,9 +327,15 @@ export function crearModulo(config) {
       const hasta = domingoDe(hastaISO);
       if (hasta <= this.hasta) return { ok: false, motivo: 'Ya está cubierto ese período.' };
 
-      // Feriados calculables del tramo nuevo, sin pisar los que ya haya.
+      // Feriados calculables, sin pisar los que ya haya.
+      //
+      // Se revisa desde hoy y no desde el tramo nuevo: un feriado que caiga en
+      // la cola del período viejo —justo donde empalman— quedaría sin marcar
+      // para siempre, porque ninguna extensión posterior vuelve a mirar atrás.
+      // Es lo que pasó con el 1° de enero al extender desde el 4.
+      const desdeFeriados = hoyISO() > this.desde ? hoyISO() : this.desde;
       const feriadosNuevos = {};
-      for (const [iso, motivo] of Object.entries(feriadosDelRango(desde, hasta))) {
+      for (const [iso, motivo] of Object.entries(feriadosDelRango(desdeFeriados, hasta))) {
         if (!this.feriados[iso]) feriadosNuevos[iso] = motivo;
       }
       const feriadosTramo = { ...this.feriados, ...feriadosNuevos };
@@ -345,11 +351,18 @@ export function crearModulo(config) {
       }
       if (!filas.length) return { ok: false, motivo: 'No se generó ningún turno nuevo.' };
 
-      if (Object.keys(feriadosNuevos).length) {
+      const fechasFeriadas = Object.keys(feriadosNuevos);
+      if (fechasFeriadas.length) {
         const { error } = await sb.from('feriados').upsert(
           Object.entries(feriadosNuevos).map(([fecha, motivo]) => ({ punto_venta: this.id, fecha, motivo })),
           { onConflict: 'punto_venta,fecha' });
         if (error) { avisarError('No se pudieron guardar los feriados.', error); return { ok: false, motivo: traducirDb(error) }; }
+
+        // Un día que pasa a ser feriado no puede conservar turnos asignados:
+        // quedarían invisibles en pantalla pero vivos en la base.
+        const { error: errT } = await sb.from('turnos').delete()
+          .eq('punto_venta', this.id).in('fecha', fechasFeriadas);
+        if (errT) avisarError('No se pudieron liberar los turnos de los feriados nuevos.', errT);
       }
 
       // upsert y no insert: si dos admins entran a la vez, los dos calculan la

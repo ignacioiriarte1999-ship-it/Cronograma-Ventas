@@ -322,7 +322,6 @@ export function renderMiHorario() {
     return;
   }
 
-  const vendedor = sess.vendedor;
   const turnos = [];
   for (const iso of Object.keys(mod.cronograma).sort()) {
     const c = mod.cronograma[iso];
