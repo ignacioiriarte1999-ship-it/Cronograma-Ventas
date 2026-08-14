@@ -162,6 +162,48 @@ Supabase Realtime.
 
 ---
 
+## Intercambios de turno
+
+Un vendedor puede proponer cambiar uno de sus turnos por el de un compañero.
+El pedido queda **pendiente hasta que un admin lo aprueba**.
+
+1. En **Mi horario**, cada turno futuro tiene un botón *Pedir cambio*.
+2. Elige con quién y cuál de los turnos de esa persona toma, con un motivo
+   opcional.
+3. Al admin le aparece un contador **🔄 Cambios** en el encabezado, en el
+   momento, vía Realtime.
+4. El admin aprueba o rechaza, con una nota opcional.
+
+**Sólo se tocan esos dos turnos.** Como cada turno es una fila propia, el
+cambio no se propaga a las semanas siguientes: es un intercambio puntual, no
+una alteración de la rotación.
+
+Antes de aprobar, la app simula el cambio y corre el detector de reglas sobre
+las semanas afectadas. Si aparece un problema que antes no estaba —alguien
+haciendo mañana y tarde el mismo día, o dos turnos en la misma semana en
+Laprida— lo muestra en el pedido y lo repite al confirmar. El admin puede
+aprobar igual: es una advertencia, no un bloqueo.
+
+Un turno no puede estar comprometido en dos pedidos pendientes a la vez; lo
+impide un índice único en la base, no sólo la interfaz.
+
+### Permisos
+
+Es el único lugar donde un no-admin escribe. Las policies lo acotan:
+
+| Acción | Quién |
+|---|---|
+| Crear un pedido | El vendedor, sólo sobre un turno **propio** y a nombre propio |
+| Ver un pedido | Quien lo pidió, quien está involucrado, y el admin |
+| Cancelarlo | Quien lo pidió, mientras siga pendiente |
+| **Aprobar o rechazar** | **Sólo el admin** |
+| Modificar los turnos | Sólo el admin, como siempre |
+
+Quién resolvió y cuándo lo sella un trigger de la base, no el cliente: es el
+registro que respalda el cambio si después alguien lo discute.
+
+---
+
 ## Extensión automática
 
 El cronograma se continúa solo. Cuando entra un admin y quedan **menos de 180

@@ -68,6 +68,9 @@
     <div class="userbox">
       <span id="conn-status" class="conn-dot" title="Conectando…"></span>
       <span class="u">Sesión: <b id="user-info"></b></span>
+      <button id="btn-pedidos" data-accion="abrir-pedidos" style="display:none">
+        🔄 Cambios <span id="pedidos-badge" class="badge-num">0</span>
+      </button>
       <button data-accion="abrir-config" title="Configuración">⚙️</button>
       <button data-accion="logout">Salir</button>
     </div>
@@ -102,6 +105,29 @@
     <div id="modal-ia-body"></div>
     <div class="modal-footer">
       <button class="btn-primary" data-accion="cerrar-ia">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-cambio">
+  <div class="modal">
+    <button class="close-x" data-accion="cerrar-cambio" aria-label="Cerrar">×</button>
+    <h3>🔄 Pedir cambio de turno</h3>
+    <div id="cambio-body"></div>
+    <div class="modal-footer">
+      <button class="btn-secondary" data-accion="cerrar-cambio">Cancelar</button>
+      <button class="btn-primary" data-accion="enviar-cambio">Enviar pedido</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-pedidos">
+  <div class="modal">
+    <button class="close-x" data-accion="cerrar-pedidos" aria-label="Cerrar">×</button>
+    <h3>🔄 Cambios de turno</h3>
+    <div id="pedidos-body"></div>
+    <div class="modal-footer">
+      <button class="btn-primary" data-accion="cerrar-pedidos">Cerrar</button>
     </div>
   </div>
 </div>

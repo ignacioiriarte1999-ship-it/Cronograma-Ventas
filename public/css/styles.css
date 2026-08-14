@@ -657,3 +657,80 @@ select.txt option { background: var(--surface); }
   margin-bottom: 4px;
 }
 .mio-selector select { max-width: 320px; }
+
+/* Intercambios de turno -------------------------------------- */
+.badge-num {
+  background: var(--accent);
+  color: #fff;
+  border-radius: 9px;
+  padding: 0 5px;
+  font-size: 10px;
+  font-weight: 700;
+  margin-left: 2px;
+}
+.mio-turno-row .pedir {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 10px;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+}
+.mio-turno-row .pedir:hover { border-color: var(--accent); color: var(--text); }
+.mio-turno-row.con-accion { grid-template-columns: 1fr 90px 80px 110px; }
+.mio-turno-row .estado-pedido { font-size: 10px; color: var(--warn); white-space: nowrap; }
+
+.pedido {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--warn);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+.pedido.aprobado { border-left-color: var(--ok); }
+.pedido.rechazado { border-left-color: var(--err); opacity: 0.65; }
+.pedido .quien { font-weight: 600; }
+.pedido .trueque {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 8px;
+  align-items: center;
+  margin: 8px 0;
+  font-size: 11px;
+}
+.pedido .trueque .lado {
+  background: var(--surface);
+  border-radius: 4px;
+  padding: 6px 8px;
+}
+.pedido .trueque .flecha { color: var(--accent); font-size: 15px; }
+.pedido .motivo { color: var(--muted); font-style: italic; margin-top: 4px; }
+.pedido .actions { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
+.pedido .actions button { padding: 4px 10px; font-size: 11px; }
+.cambio-campo { margin-bottom: 10px; }
+.cambio-campo label {
+  display: block;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+textarea.txt {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px 10px;
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+  width: 100%;
+  resize: vertical;
+  min-height: 60px;
+}
+textarea.txt:focus { outline: none; border-color: var(--accent); }

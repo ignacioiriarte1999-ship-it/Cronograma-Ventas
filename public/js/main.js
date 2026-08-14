@@ -7,10 +7,14 @@ import {
   cambiarPassword, listarUsuarios, crearPadronFaltante, crearUsuario, listarVendedores,
 } from './auth.js';
 import { MIN_PASS, passInicial, PADRON } from './config.js';
-import { esc, fromISO, formatShort } from './utils.js';
+import { esc, fromISO, formatShort, formatLargo, hoyISO } from './utils.js';
 import { getModulo, listaModulos } from './modules.js';
 import { HORIZONTE_MINIMO_DIAS, objetivoDeCobertura, diasRestantes } from './schedule.js';
-import { renderCronograma, renderMiHorario, elegirPeriodo, elegirVendedor } from './render.js';
+import { renderCronograma, renderMiHorario, elegirPeriodo, elegirVendedor, setPedidosPropios } from './render.js';
+import {
+  listarPedidos, contarPendientes, suscribirPedidos, crearPedido, cancelarPedido,
+  aprobarPedido, rechazarPedido, revisarImpacto, describirTurno,
+} from './intercambios.js';
 import {
   revisar, corregirAutomatico, aplicarFix, rechazarFix, aplicarTodas, rechazarTodas,
 } from './corrector.js';
@@ -111,6 +115,8 @@ async function iniciarApp(sess) {
   }
 
   await revisarHorizonte();
+  await refrescarPedidos();
+  suscribirPedidos(refrescarPedidos);
 }
 
 // ------------------------------------------------------------
@@ -173,6 +179,225 @@ async function hacerExtender(btn) {
   $('modal-config').classList.remove('open');
   if (hechos.length) mostrarAvisoExtension(hechos);
   else alert('No hubo nada que extender: ambos cronogramas ya llegan hasta ' + objetivo + '.');
+}
+
+
+// ------------------------------------------------------------
+//  INTERCAMBIOS DE TURNO
+// ------------------------------------------------------------
+// Un vendedor propone cambiar un turno suyo por el de un compañero; el admin
+// aprueba o rechaza. Al aprobar se intercambian las dos filas y nada más: el
+// cambio no toca las semanas siguientes.
+
+let pedidoEnCurso = null;   // el turno propio sobre el que se está pidiendo
+
+async function refrescarPedidos() {
+  const sess = getSession();
+  if (!sess) return;
+  try {
+    if (esAdmin()) {
+      const n = await contarPendientes();
+      const btn = $('btn-pedidos');
+      btn.style.display = n > 0 ? '' : 'none';
+      $('pedidos-badge').textContent = n;
+    } else {
+      // El vendedor ve siempre el botón: ahí consulta el estado de lo que pidió.
+      $('btn-pedidos').style.display = '';
+      const mios = await listarPedidos({ limite: 30 });
+      const abiertos = mios.filter((p) => p.estado === 'pendiente');
+      $('pedidos-badge').textContent = abiertos.length;
+      $('pedidos-badge').style.display = abiertos.length ? '' : 'none';
+      setPedidosPropios(new Map(
+        abiertos.map((p) => [`${p.pide.fecha}|${p.pide.turno}`, 'pendiente'])));
+      if (tabActual === 'mio') renderMiHorario();
+    }
+  } catch (e) {
+    console.warn('Pedidos:', e);
+  }
+}
+
+function abrirPedirCambio(iso, turno) {
+  const sess = getSession();
+  const mod = getModulo(sess.puntoVenta);
+  if (!mod) return;
+  pedidoEnCurso = { fecha: iso, turno, nombre: sess.vendedor };
+
+  const hoy = hoyISO();
+  const companeros = mod.vendedores.filter((v) => v !== sess.vendedor);
+
+  $('cambio-body').innerHTML = `
+    <div class="info-box">Vas a proponer que otra persona tome tu turno del
+      <b>${esc(formatLargo(fromISO(iso)))}</b> a la <b>${turno === 'manana' ? 'mañana' : 'tarde'}</b>,
+      y vos tomes uno suyo. El cambio se aplica sólo a esos dos turnos, y necesita la
+      aprobación del administrador.</div>
+
+    <div class="cambio-campo">
+      <label for="cb-comp">Con quién</label>
+      <select class="txt" id="cb-comp" data-accion="cambio-companero">
+        <option value="">— elegí un compañero —</option>
+        ${companeros.map((v) => `<option value="${esc(v)}">${esc(v)}</option>`).join('')}
+      </select>
+    </div>
+
+    <div class="cambio-campo">
+      <label for="cb-turno">Qué turno suyo tomás</label>
+      <select class="txt" id="cb-turno" disabled>
+        <option value="">— elegí primero un compañero —</option>
+      </select>
+    </div>
+
+    <div class="cambio-campo">
+      <label for="cb-motivo">Motivo (opcional)</label>
+      <textarea class="txt" id="cb-motivo" maxlength="300"
+        placeholder="Por ejemplo: tengo turno médico"></textarea>
+    </div>
+    <div id="cb-msg" class="form-msg"></div>`;
+  $('modal-cambio').classList.add('open');
+}
+
+/** Carga los turnos futuros del compañero elegido. */
+function cargarTurnosCompanero(nombre) {
+  const sess = getSession();
+  const mod = getModulo(sess.puntoVenta);
+  const sel = $('cb-turno');
+  if (!nombre) { sel.disabled = true; sel.innerHTML = '<option value="">— elegí primero un compañero —</option>'; return; }
+
+  const hoy = hoyISO();
+  const suyos = [];
+  for (const iso of Object.keys(mod.cronograma).sort()) {
+    if (iso < hoy) continue;
+    const c = mod.cronograma[iso];
+    if (!c || c.holiday || c.closed) continue;
+    for (const t of ['manana', 'tarde']) {
+      if (c[t] === nombre) suyos.push({ fecha: iso, turno: t });
+    }
+  }
+  sel.disabled = false;
+  sel.innerHTML = suyos.length
+    ? '<option value="">— elegí un turno —</option>' + suyos.slice(0, 60).map((t) =>
+        `<option value="${t.fecha}|${t.turno}">${esc(describirTurno(t))}</option>`).join('')
+    : `<option value="">${esc(nombre)} no tiene turnos futuros</option>`;
+}
+
+async function enviarCambio(btn) {
+  const msg = $('cb-msg');
+  msg.className = 'form-msg err';
+  const nombre = $('cb-comp').value;
+  const valor = $('cb-turno').value;
+  if (!nombre) { msg.textContent = 'Elegí con quién querés cambiar.'; return; }
+  if (!valor) { msg.textContent = 'Elegí qué turno suyo tomás.'; return; }
+
+  const sess = getSession();
+  const mod = getModulo(sess.puntoVenta);
+  const [fecha, turno] = valor.split('|');
+
+  btn.disabled = true;
+  try {
+    await crearPedido({
+      puntoVenta: mod.id,
+      mio: pedidoEnCurso,
+      suyo: { fecha, turno },
+      vendedorSuyoId: mod._idPorNombre.get(nombre),
+      motivo: $('cb-motivo').value.trim(),
+    });
+    $('modal-cambio').classList.remove('open');
+    await refrescarPedidos();
+    alert('Pedido enviado. Te avisamos cuando el administrador lo resuelva.');
+  } catch (e) {
+    msg.textContent = e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function abrirPedidos() {
+  $('modal-pedidos').classList.add('open');
+  $('pedidos-body').innerHTML = '<div class="muted small">Cargando…</div>';
+  try {
+    const pedidos = await listarPedidos({ limite: 40 });
+    $('pedidos-body').innerHTML = pedidos.length
+      ? pedidos.map((p) => htmlPedido(p)).join('')
+      : '<div class="empty-state">No hay pedidos de cambio.</div>';
+  } catch (e) {
+    $('pedidos-body').innerHTML = `<div class="warn-box">No se pudieron leer los pedidos: ${esc(e.message)}</div>`;
+  }
+}
+
+function htmlPedido(p) {
+  const mod = getModulo(p.puntoVenta);
+  const impacto = p.estado === 'pendiente' && mod ? revisarImpacto(mod, p) : [];
+  const sess = getSession();
+  const esMio = p.solicitante === sess.uid;
+
+  const acciones = p.estado !== 'pendiente' ? ''
+    : esAdmin()
+      ? `<div class="actions">
+           <button class="btn-primary" data-accion="pedido-aprobar" data-id="${p.id}">Aprobar</button>
+           <button class="btn-secondary" data-accion="pedido-rechazar" data-id="${p.id}">Rechazar</button>
+         </div>`
+      : (esMio ? `<div class="actions">
+           <button class="btn-secondary" data-accion="pedido-cancelar" data-id="${p.id}">Cancelar pedido</button>
+         </div>` : '');
+
+  return `<div class="pedido ${esc(p.estado)}" id="pedido-${p.id}">
+    <div>
+      <span class="quien">${esc(p.pide.nombre)}</span> quiere cambiar con
+      <span class="quien">${esc(p.recibe.nombre)}</span>
+      <span class="muted small">· ${esc(mod?.nombre || p.puntoVenta)}
+      · ${new Date(p.creado).toLocaleDateString('es-AR')}</span>
+    </div>
+    <div class="trueque">
+      <div class="lado"><b>${esc(p.pide.nombre)}</b> deja<br />${esc(describirTurno(p.pide))}</div>
+      <div class="flecha">⇄</div>
+      <div class="lado"><b>${esc(p.recibe.nombre)}</b> deja<br />${esc(describirTurno(p.recibe))}</div>
+    </div>
+    ${p.motivo ? `<div class="motivo">“${esc(p.motivo)}”</div>` : ''}
+    ${impacto.length ? `<div class="warn-box mt-8">Si se aprueba, esto queda mal:
+      <ul style="margin:4px 0 0 16px">${impacto.map((i) => `<li>${esc(i)}</li>`).join('')}</ul></div>` : ''}
+    ${p.estado !== 'pendiente' ? `<div class="muted small mt-4">Estado: <b>${esc(p.estado)}</b>${
+      p.notaAdmin ? ` — ${esc(p.notaAdmin)}` : ''}</div>` : ''}
+    ${acciones}
+  </div>`;
+}
+
+async function resolverPedido(id, aprobar) {
+  const pedidos = await listarPedidos({ limite: 40 });
+  const p = pedidos.find((x) => String(x.id) === String(id));
+  if (!p) return;
+
+  const mod = getModulo(p.puntoVenta);
+  if (aprobar) {
+    const impacto = revisarImpacto(mod, p);
+    const aviso = impacto.length
+      ? `\n\nATENCIÓN, esto queda mal:\n  · ${impacto.join('\n  · ')}\n\n¿Aprobar igual?`
+      : '\n\n¿Confirmás?';
+    if (!confirm(`${p.pide.nombre} ⇄ ${p.recibe.nombre}${aviso}`)) return;
+  } else if (!confirm(`¿Rechazar el pedido de ${p.pide.nombre}?`)) {
+    return;
+  }
+
+  const nota = prompt(aprobar ? 'Nota para el vendedor (opcional):' : 'Motivo del rechazo (opcional):', '');
+  if (nota === null) return;
+
+  try {
+    if (aprobar) await aprobarPedido(p, nota || null);
+    else await rechazarPedido(p, nota || null);
+    await abrirPedidos();
+    await refrescarPedidos();
+  } catch (e) {
+    alert('No se pudo resolver el pedido:\n\n' + e.message);
+  }
+}
+
+async function hacerCancelarPedido(id) {
+  if (!confirm('¿Cancelar tu pedido de cambio?')) return;
+  try {
+    await cancelarPedido(id);
+    await abrirPedidos();
+    await refrescarPedidos();
+  } catch (e) {
+    alert('No se pudo cancelar:\n\n' + e.message);
+  }
 }
 
 /** Mensaje a pantalla completa dentro de la pestaña de un cronograma. */
@@ -458,6 +683,14 @@ document.addEventListener('click', (ev) => {
     case 'crear-padron': hacerCrearPadron(el); break;
     case 'crear-usuario': hacerCrearUsuario(el); break;
     case 'extender': hacerExtender(el); break;
+    case 'pedir-cambio': abrirPedirCambio(iso, turno); break;
+    case 'cerrar-cambio': $('modal-cambio').classList.remove('open'); break;
+    case 'enviar-cambio': enviarCambio(el); break;
+    case 'abrir-pedidos': abrirPedidos(); break;
+    case 'cerrar-pedidos': $('modal-pedidos').classList.remove('open'); break;
+    case 'pedido-aprobar': resolverPedido(el.dataset.id, true); break;
+    case 'pedido-rechazar': resolverPedido(el.dataset.id, false); break;
+    case 'pedido-cancelar': hacerCancelarPedido(el.dataset.id); break;
     case 'pass-gate-submit': hacerCambioObligatorio(); break;
     case 'pass-gate-salir': logout(); break;
 
@@ -510,6 +743,8 @@ document.addEventListener('change', (ev) => {
 });
 
 document.addEventListener('change', (ev) => {
+  const comp = ev.target.closest('[data-accion="cambio-companero"]');
+  if (comp) { cargarTurnosCompanero(comp.value); return; }
   const el = ev.target.closest('[data-accion="elegir-vendedor"]');
   if (!el) return;
   const [modId, nombre] = el.value.split('|');

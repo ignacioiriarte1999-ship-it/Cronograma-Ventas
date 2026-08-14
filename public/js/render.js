@@ -276,6 +276,10 @@ function htmlDias(mod, lunes, editable, hoy) {
 // ------------------------------------------------------------
 // Vendedor elegido a mano en "Mi horario" (admin o usuario sin vendedor propio).
 let vendedorElegido = null;
+/** "fecha|turno" → estado del pedido, para no pedir dos veces lo mismo. */
+let pedidosPropios = new Map();
+export const setPedidosPropios = (mapa) => { pedidosPropios = mapa || new Map(); };
+
 export const elegirVendedor = (modId, nombre) => {
   vendedorElegido = nombre ? { modId, nombre } : null;
 };
@@ -379,10 +383,21 @@ export function renderMiHorario() {
       const cls = t.iso === hoy ? 'hoy' : (t.iso < hoy ? 'pasado' : '');
       const esM = t.turno === 'manana';
       const hor = esM ? mod.reglas.horarioManana : mod.reglas.horarioTarde;
-      html += `<div class="mio-turno-row ${cls}">
+      // Sólo tiene sentido pedir cambio sobre un turno propio que no pasó.
+      const futuro = t.iso >= hoy;
+      const pedido = pedidosPropios.get(`${t.iso}|${t.turno}`);
+      let accion = '';
+      if (propio && futuro) {
+        accion = pedido
+          ? `<div class="estado-pedido">${pedido === 'pendiente' ? '⏳ cambio pedido' : esc(pedido)}</div>`
+          : `<div><button class="pedir" data-accion="pedir-cambio"
+               data-iso="${t.iso}" data-turno="${t.turno}">Pedir cambio</button></div>`;
+      }
+      html += `<div class="mio-turno-row ${cls}${accion ? ' con-accion' : ''}">
         <div class="dia">${formatLargo(d)}</div>
         <div><span class="turno-badge ${esM ? 'M' : 'T'}">${esM ? 'Mañana' : 'Tarde'}</span></div>
         <div class="horario">${esc(hor)}</div>
+        ${accion}
       </div>`;
     }
     html += '</div>';
