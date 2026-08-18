@@ -77,6 +77,10 @@ const COMBOS_1M_1T = [[1, 2], [1, 3], [1, 4], [2, 1], [2, 3], [2, 4],
 const COMBOS_2M_1T = [[1, 2, 3], [1, 2, 4], [1, 3, 2], [1, 3, 4], [1, 4, 2], [1, 4, 3],
   [2, 3, 1], [2, 3, 4], [2, 4, 1], [2, 4, 3], [3, 4, 1], [3, 4, 2]];
 
+export /** Con qué tipo empalma una semana, según quién cerró la anterior. */
+const tipoQueAbre = (vendedor) =>
+  Object.keys(CC_TIPOS).find((t) => CC_TIPOS[t].abre === vendedor) || null;
+
 export function generarSemana(tipo, semIdx) {
   const { abre, cierra } = CC_TIPOS[tipo];
   const w = [{}, {}, {}, {}, {}, {}]; // L, Ma, Mi, J, V, S
@@ -153,8 +157,13 @@ function generar(feriados = {}, desde, hasta) {
       continue;
     }
 
-    const w = generarSemana(tipoDeSemana(i), i);
+    // El tipo sale de quién cerró el sábado anterior, no del índice: las
+    // semanas fijas vienen del cronograma real y corren la fase del ciclo, así
+    // que contarlas como si nada rompía la regla del cierre en la costura.
     const lunes = fromISO(sem.lunes);
+    const sabAnterior = cronograma[toISO(addDays(lunes, -2))];
+    const cerradorPrevio = sabAnterior && !sabAnterior.holiday ? sabAnterior.manana : null;
+    const w = generarSemana(tipoQueAbre(cerradorPrevio) || tipoDeSemana(i), i);
     for (let d = 0; d < 6; d++) {
       const iso = toISO(addDays(lunes, d));
       if (!cronograma[iso] || cronograma[iso].holiday) continue;
@@ -288,8 +297,6 @@ function detectarProblemas(sem) {
 // el último sábado cargado. Así la extensión empalma con lo que realmente pasó,
 // aunque en el camino se haya editado a mano.
 
-const tipoQueAbre = (vendedor) =>
-  Object.keys(CC_TIPOS).find((t) => CC_TIPOS[t].abre === vendedor) || null;
 
 /**
  * Genera los turnos entre `desde` y `hasta` continuando el ciclo existente.
