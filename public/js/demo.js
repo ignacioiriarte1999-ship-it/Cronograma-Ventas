@@ -17,22 +17,22 @@ import { definirAlias } from './alias.js';
 //  DETECCIÓN
 // ------------------------------------------------------------
 // Se activa desde /demo/, con ?demo en la URL, o con un host que empiece con
-// "demo.". Queda anotado en la sesión para que sobreviva a un recargado.
-const CLAVE = 'crono_demo';
+// "demo.".
+//
+// Se decide SÓLO por la URL, sin recordarlo en la sesión. Antes quedaba anotado
+// en sessionStorage para sobrevivir a un recargado, pero eso hacía que después
+// de mirar la demo la app real siguiera en modo demo en esa misma pestaña: un
+// vendedor habría visto turnos inventados creyendo que eran los suyos. La ruta
+// /demo ya sobrevive al recargado por sí sola.
 
 export function esDemo() {
-  try {
-    if (sessionStorage.getItem(CLAVE) === '1') return true;
-    const activa = location.pathname.startsWith('/demo')
-      || new URLSearchParams(location.search).has('demo')
-      || location.hostname.startsWith('demo.');
-    if (activa) sessionStorage.setItem(CLAVE, '1');
-    return activa;
-  } catch (e) {
-    return location.pathname.startsWith('/demo')
-      || new URLSearchParams(location.search).has('demo');
-  }
+  return location.pathname.startsWith('/demo')
+    || new URLSearchParams(location.search).has('demo')
+    || location.hostname.startsWith('demo.');
 }
+
+/** Limpia el rastro que dejaban las versiones anteriores. */
+try { sessionStorage.removeItem('crono_demo'); } catch (e) { /* modo privado */ }
 
 // ------------------------------------------------------------
 //  NOMBRES DE FANTASÍA
