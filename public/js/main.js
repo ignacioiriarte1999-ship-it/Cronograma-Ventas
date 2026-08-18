@@ -40,8 +40,12 @@ if (DEMO) {
     + '<div class="demo-nota">Datos de ejemplo. Podés editar lo que quieras: nada se guarda '
     + 'y al recargar la página vuelve al estado inicial.</div>';
   $('demo-accesos').style.display = 'block';
-  document.querySelector('#login-screen .sub').textContent = 'Gestión de turnos por sucursal';
-  document.querySelector('#login-screen .login-hint').remove();
+  // Con optional chaining porque el HTML de /demo/ ya viene sin la marca del
+  // cliente ni la ayuda con apellidos: esto sólo hace falta cuando se entra
+  // por ?demo=1 sobre el index de producción.
+  const sub = document.querySelector('#login-screen .sub');
+  if (sub) sub.textContent = 'Gestión de turnos por sucursal';
+  document.querySelector('#login-screen .login-hint')?.remove();
   document.title = 'Cronogramas — demostración';
 }
 

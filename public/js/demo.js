@@ -16,19 +16,21 @@ import { definirAlias } from './alias.js';
 // ------------------------------------------------------------
 //  DETECCIÓN
 // ------------------------------------------------------------
-// Se activa con ?demo en la URL o con un host que empiece con "demo.".
-// Queda anotado en la sesión para que sobreviva a un recargado sin el parámetro.
+// Se activa desde /demo/, con ?demo en la URL, o con un host que empiece con
+// "demo.". Queda anotado en la sesión para que sobreviva a un recargado.
 const CLAVE = 'crono_demo';
 
 export function esDemo() {
   try {
     if (sessionStorage.getItem(CLAVE) === '1') return true;
-    const activa = new URLSearchParams(location.search).has('demo')
+    const activa = location.pathname.startsWith('/demo')
+      || new URLSearchParams(location.search).has('demo')
       || location.hostname.startsWith('demo.');
     if (activa) sessionStorage.setItem(CLAVE, '1');
     return activa;
   } catch (e) {
-    return new URLSearchParams(location.search).has('demo');
+    return location.pathname.startsWith('/demo')
+      || new URLSearchParams(location.search).has('demo');
   }
 }
 

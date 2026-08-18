@@ -209,10 +209,20 @@ registro que respalda el cambio si después alguien lo discute.
 Para mandarle una demostración funcional a un tercero sin exponer datos reales
 ni tocar la base de producción.
 
-**Cómo se activa**: agregando `?demo=1` a la URL, o desde un dominio que empiece
-con `demo.` — por ejemplo un segundo proyecto de Vercel apuntado al mismo repo
-con el dominio `demo-cronogramas.vercel.app`. Esa segunda variante es la
-preferible: el link queda limpio y no hay parámetro que perder.
+**La demo vive en `public/demo/`** y se sirve en la ruta `/demo`, que es el link
+para mandar. También se activa con `?demo=1` sobre la app normal, o desde un
+dominio que empiece con `demo.`.
+
+Ese `index.html` **se genera**, no se edita: es el de producción con la marca del
+cliente quitada y las rutas apuntando a `../`. Así la carpeta está separada pero
+no se desactualiza.
+
+```bash
+python3 herramientas/demo-html.py generar     # tras cambiar public/index.html
+python3 herramientas/demo-html.py verificar   # avisa si quedaron desalineados
+```
+
+Todo lo demás —módulos, estilos, reglas— es **el mismo código** que producción.
 
 **Qué cambia**:
 
