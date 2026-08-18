@@ -13,7 +13,7 @@ import { HORIZONTE_MINIMO_DIAS, objetivoDeCobertura, diasRestantes } from './sch
 import { renderCronograma, renderMiHorario, elegirPeriodo, elegirVendedor, setPedidosPropios } from './render.js';
 import {
   listarPedidos, contarPendientes, suscribirPedidos, crearPedido, cancelarPedido,
-  aprobarPedido, rechazarPedido, revisarImpacto, describirTurno,
+  aprobarPedido, rechazarPedido, revisarImpacto, describirTurno, estaInstalado,
 } from './intercambios.js';
 import {
   revisar, corregirAutomatico, aplicarFix, rechazarFix, aplicarTodas, rechazarTodas,
@@ -198,17 +198,21 @@ async function refrescarPedidos() {
     if (esAdmin()) {
       const n = await contarPendientes();
       const btn = $('btn-pedidos');
-      btn.style.display = n > 0 ? '' : 'none';
+      btn.style.display = estaInstalado() && n > 0 ? '' : 'none';
       $('pedidos-badge').textContent = n;
     } else {
-      // El vendedor ve siempre el botón: ahí consulta el estado de lo que pidió.
-      $('btn-pedidos').style.display = '';
       const mios = await listarPedidos({ limite: 30 });
+      // El vendedor ve el botón para consultar el estado de lo que pidió, pero
+      // sólo si la función está instalada.
+      $('btn-pedidos').style.display = estaInstalado() ? '' : 'none';
       const abiertos = mios.filter((p) => p.estado === 'pendiente');
       $('pedidos-badge').textContent = abiertos.length;
       $('pedidos-badge').style.display = abiertos.length ? '' : 'none';
-      setPedidosPropios(new Map(
-        abiertos.map((p) => [`${p.pide.fecha}|${p.pide.turno}`, 'pendiente'])));
+      setPedidosPropios(
+        estaInstalado()
+          ? new Map(abiertos.map((p) => [`${p.pide.fecha}|${p.pide.turno}`, 'pendiente']))
+          : null,
+        estaInstalado());
       if (tabActual === 'mio') renderMiHorario();
     }
   } catch (e) {
@@ -315,6 +319,12 @@ async function abrirPedidos() {
   $('pedidos-body').innerHTML = '<div class="muted small">Cargando…</div>';
   try {
     const pedidos = await listarPedidos({ limite: 40 });
+    if (!estaInstalado()) {
+      $('pedidos-body').innerHTML = `<div class="warn-box">La función de intercambios
+        todavía no está habilitada en la base. Falta correr
+        <code>supabase/intercambios.sql</code> en el SQL Editor de Supabase.</div>`;
+      return;
+    }
     $('pedidos-body').innerHTML = pedidos.length
       ? pedidos.map((p) => htmlPedido(p)).join('')
       : '<div class="empty-state">No hay pedidos de cambio.</div>';

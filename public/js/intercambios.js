@@ -11,6 +11,22 @@ import { getSession, esAdmin } from './auth.js';
 import { getModulo } from './modules.js';
 import { fromISO, formatLargo, agruparPorSemanaDesde } from './utils.js';
 
+// La función depende de una tabla que puede no estar creada todavía. En vez de
+// mostrarle a un vendedor el error crudo de Postgres, se detecta una sola vez y
+// la app esconde la función entera.
+let instalado = true;
+export const estaInstalado = () => instalado;
+
+function faltaLaTabla(error) {
+  if (!error) return false;
+  const falta = error.code === 'PGRST205' || /schema cache/i.test(error.message || '');
+  if (falta) {
+    instalado = false;
+    console.warn('Intercambios deshabilitados: falta correr supabase/intercambios.sql');
+  }
+  return falta;
+}
+
 const SELECT = `id, punto_venta, solicitante, motivo, estado, nota_admin, creado, resuelto,
   vendedor_pide, fecha_pide, turno_pide,
   vendedor_recibe, fecha_recibe, turno_recibe,
@@ -40,18 +56,23 @@ export async function listarPedidos({ estado = null, limite = 50 } = {}) {
   let q = sb.from('intercambios').select(SELECT).order('creado', { ascending: false }).limit(limite);
   if (estado) q = q.eq('estado', estado);
   const { data, error } = await q;
-  if (error) throw error;
+  if (error) {
+    if (faltaLaTabla(error)) return [];
+    throw error;
+  }
   return (data || []).map(normalizar);
 }
 
 export async function contarPendientes() {
   const { count, error } = await sb.from('intercambios')
     .select('*', { count: 'exact', head: true }).eq('estado', 'pendiente');
-  return error ? 0 : (count || 0);
+  if (error) { faltaLaTabla(error); return 0; }
+  return count || 0;
 }
 
 /** Avisa cuando cambia algo, para refrescar el contador sin recargar. */
 export function suscribirPedidos(alCambiar) {
+  if (!instalado) return null;
   return sb.channel('intercambios')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'intercambios' }, alCambiar)
     .subscribe();

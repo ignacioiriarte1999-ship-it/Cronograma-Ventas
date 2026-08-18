@@ -278,7 +278,11 @@ function htmlDias(mod, lunes, editable, hoy) {
 let vendedorElegido = null;
 /** "fecha|turno" → estado del pedido, para no pedir dos veces lo mismo. */
 let pedidosPropios = new Map();
-export const setPedidosPropios = (mapa) => { pedidosPropios = mapa || new Map(); };
+let intercambiosHabilitados = false;
+export const setPedidosPropios = (mapa, habilitado = true) => {
+  pedidosPropios = mapa || new Map();
+  intercambiosHabilitados = habilitado;
+};
 
 export const elegirVendedor = (modId, nombre) => {
   vendedorElegido = nombre ? { modId, nombre } : null;
@@ -387,7 +391,7 @@ export function renderMiHorario() {
       const futuro = t.iso >= hoy;
       const pedido = pedidosPropios.get(`${t.iso}|${t.turno}`);
       let accion = '';
-      if (propio && futuro) {
+      if (propio && futuro && intercambiosHabilitados) {
         accion = pedido
           ? `<div class="estado-pedido">${pedido === 'pendiente' ? '⏳ cambio pedido' : esc(pedido)}</div>`
           : `<div><button class="pedir" data-accion="pedir-cambio"
