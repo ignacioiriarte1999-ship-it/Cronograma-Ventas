@@ -172,7 +172,7 @@ async function revisarHorizonte() {
 }
 
 function mostrarAvisoExtension(hechos) {
-  $('modal-ia-titulo').textContent = '📅 Cronograma extendido';
+  $('modal-ia-titulo').textContent = 'Cronograma extendido';
   $('modal-ia-body').innerHTML = `
     <div class="info-box">Quedaba menos de medio año de cronograma cargado, así que
     se continuó automáticamente siguiendo la rotación vigente.</div>
@@ -640,7 +640,7 @@ async function cargarUsuarios() {
         <div>${esc(u.user)} ${u.vendedor ? `<span class="muted">(${esc(nom(u.vendedor))})</span>` : ''}
           <span class="role-tag ${u.rol === 'admin' ? 'admin' : 'vend'}">${esc(u.rol)}</span></div>
         <div class="muted small">${u.puntoVenta ? esc(u.puntoVenta.toUpperCase()) : '—'}</div>
-        <div class="muted small">${u.passCambiada ? '🔒 propia' : '🔓 inicial'}</div>
+        <div class="small ${u.passCambiada ? 'ok-txt' : 'warn-txt'}">${u.passCambiada ? 'Propia' : 'Por defecto'}</div>
       </div>`).join('')}</div>
       <div class="muted small mt-8">Para <b>resetear la contraseña</b> de alguien o <b>dar de baja</b> una cuenta,
       entrá al panel de Supabase → Authentication → Users. Por seguridad, esas acciones no se pueden hacer desde el navegador.</div>`;

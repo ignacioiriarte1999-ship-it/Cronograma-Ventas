@@ -42,7 +42,7 @@ export const FIN_SEMESTRE = '2027-01-03';
 // ============================================================
 //  PADRÓN INICIAL
 // ============================================================
-// Sólo se usa para el alta masiva desde el panel de admin (⚙️ → Usuarios).
+// Sólo se usa para el alta masiva desde el panel de admin (Configuración → Usuarios).
 // Después de eso, la fuente de verdad es Supabase Auth + la tabla perfiles.
 // La contraseña inicial es <apellido sin guiones>2026 y la app obliga a
 // cambiarla en el primer ingreso.

@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<meta name="theme-color" content="#0d1017" />
+<meta name="theme-color" content="#eef1f6" />
 <title>Cronogramas — ContacCenter · Laprida 235</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📅</text></svg>" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%231d4ed8'/><text x='50' y='71' font-family='-apple-system,Arial,sans-serif' font-size='60' font-weight='700' fill='white' text-anchor='middle'>C</text></svg>" />
 <link rel="stylesheet" href="css/styles.css" />
 </head>
 <body>
@@ -13,7 +13,7 @@
 <!-- ============================ LOGIN ============================ -->
 <div id="login-screen">
   <div class="login-box">
-    <h1>📅 Cronogramas</h1>
+    <h1><span class="brand-mark">C</span>Cronogramas</h1>
     <p class="sub">ContacCenter · Laprida 235</p>
 
     <label for="li-user">Usuario</label>
@@ -41,7 +41,7 @@
 <!-- ============ CAMBIO DE CONTRASEÑA OBLIGATORIO ============ -->
 <div id="pass-gate">
   <div class="login-box">
-    <h1>🔐 Elegí tu contraseña</h1>
+    <h1><span class="brand-mark">C</span>Elegí tu contraseña</h1>
     <p class="sub">Es tu primer ingreso. Cambiá la contraseña inicial para continuar.</p>
 
     <label for="pg-actual">Contraseña actual</label>
@@ -65,16 +65,16 @@
 <!-- ============================ APP ============================ -->
 <div id="app-shell">
   <header class="appbar">
-    <div class="brand">📅 Cronogramas<span class="dot">.</span></div>
+    <div class="brand"><span class="brand-mark">C</span>Cronogramas<span class="dot">.</span></div>
     <span class="demo-chip">DEMO</span>
     <nav class="tabs" id="tabs"></nav>
     <div class="userbox">
       <span id="conn-status" class="conn-dot" title="Conectando…"></span>
       <span class="u">Sesión: <b id="user-info"></b></span>
       <button id="btn-pedidos" data-accion="abrir-pedidos" style="display:none">
-        🔄 Cambios <span id="pedidos-badge" class="badge-num">0</span>
+        Cambios <span id="pedidos-badge" class="badge-num">0</span>
       </button>
-      <button data-accion="abrir-config" title="Configuración">⚙️</button>
+      <button data-accion="abrir-config" title="Configuración">Configuración</button>
       <button data-accion="logout">Salir</button>
     </div>
   </header>
@@ -104,7 +104,7 @@
 <div class="modal-backdrop" id="modal-ia">
   <div class="modal">
     <button class="close-x" data-accion="cerrar-ia" aria-label="Cerrar">×</button>
-    <h3 id="modal-ia-titulo">⚡ Resultado de la corrección automática</h3>
+    <h3 id="modal-ia-titulo">Resultado de la corrección automática</h3>
     <div id="modal-ia-body"></div>
     <div class="modal-footer">
       <button class="btn-primary" data-accion="cerrar-ia">Cerrar</button>
@@ -115,7 +115,7 @@
 <div class="modal-backdrop" id="modal-cambio">
   <div class="modal">
     <button class="close-x" data-accion="cerrar-cambio" aria-label="Cerrar">×</button>
-    <h3>🔄 Pedir cambio de turno</h3>
+    <h3>Pedir cambio de turno</h3>
     <div id="cambio-body"></div>
     <div class="modal-footer">
       <button class="btn-secondary" data-accion="cerrar-cambio">Cancelar</button>
@@ -127,7 +127,7 @@
 <div class="modal-backdrop" id="modal-pedidos">
   <div class="modal">
     <button class="close-x" data-accion="cerrar-pedidos" aria-label="Cerrar">×</button>
-    <h3>🔄 Cambios de turno</h3>
+    <h3>Cambios de turno</h3>
     <div id="pedidos-body"></div>
     <div class="modal-footer">
       <button class="btn-primary" data-accion="cerrar-pedidos">Cerrar</button>
@@ -138,7 +138,7 @@
 <div class="modal-backdrop" id="modal-config">
   <div class="modal">
     <button class="close-x" data-accion="cerrar-config" aria-label="Cerrar">×</button>
-    <h3>⚙️ Configuración</h3>
+    <h3>Configuración</h3>
     <div id="config-body"></div>
     <div class="modal-footer">
       <button class="btn-primary" data-accion="cerrar-config">Cerrar</button>

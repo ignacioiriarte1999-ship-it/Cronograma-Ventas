@@ -2,20 +2,27 @@
    TOKENS
    ============================================================ */
 :root {
-  --bg: #0d1017;
-  --surface: #171b25;
-  --card: #1e2330;
-  --border: #2b3040;
-  --text: #e6e9f2;
-  --muted: #7d8399;
-  --accent: #6c63ff;
-  --accent2: #ff6bd6;
-  --ok: #56d364;
-  --warn: #fbbf24;
-  --err: #ff6b7a;
-  --c1: #4ade80;
-  --c2: #60a5fa;
-  --c3: #fbbf24;
+  /* Paleta corporativa clara: la misma que se usaba sólo en la demo.
+     Un solo tema para toda la app, sin distinción visual entre el
+     producto real y la demostración. */
+  --bg: #eef1f6;
+  --surface: #ffffff;
+  --card: #f3f6fa;
+  --border: #d5dce7;
+  --text: #16202e;
+  --muted: #64748b;
+  --accent: #1d4ed8;
+  --accent-hover: #1a45bd;
+  --accent2: #12306b;
+  --accent-soft: rgba(29, 78, 216, 0.08);
+  --ok: #12703a;
+  --warn: #8a5a00;
+  --err: #b3261e;
+  --c1: #12703a;
+  --c2: #1a4fbf;
+  --c3: #8a5a00;
+  --sombra: 0 1px 2px rgba(16, 24, 40, 0.06);
+  --sombra-md: 0 4px 12px rgba(16, 24, 40, 0.10);
   --mono: 'SF Mono', Menlo, Consolas, monospace;
 }
 
@@ -776,3 +783,143 @@ body.es-demo .demo-chip {
 }
 .demo-btn:hover { border-color: var(--accent); }
 .demo-nota { color: var(--muted); font-size: 10px; line-height: 1.5; margin-top: 8px; }
+
+
+/* ============================================================
+   TEMA CORPORATIVO — reglas que antes vivían en demo.css
+   ============================================================
+   La demo y la app real comparten el mismo diseño: no hay motivo para que
+   un cliente vea un producto y un prospecto vea otro. Estas reglas repintan
+   los pocos componentes que tenían un color escrito a mano en vez de un
+   token (gradientes, rgba() calculados sobre el morado/rosa original).
+   ============================================================ */
+body { -webkit-font-smoothing: antialiased; }
+
+code { background: rgba(29, 78, 216, 0.08); }
+
+/* Relieve suave: sobre fondo claro el borde solo se ve plano --- */
+.login-box, .semana, aside.cron-side .panel, .modal, .mio-summary .box {
+  box-shadow: var(--sombra);
+  border-radius: 6px;
+}
+
+header.appbar {
+  box-shadow: 0 1px 3px rgba(16, 24, 40, 0.08);
+  padding: 12px 20px;
+}
+header .brand { letter-spacing: -0.01em; }
+header nav.tabs button.active { color: var(--accent); font-weight: 600; }
+
+/* Degradés de marca -> azul corporativo plano ----------------- */
+.login-box button.primary,
+.btn-ai {
+  background: var(--accent);
+}
+.login-box button.primary:hover,
+.btn-ai:hover { background: #1a45bd; }
+
+.mio-header { background: linear-gradient(135deg, var(--accent2), var(--accent)); }
+
+/* Tablas ------------------------------------------------------ */
+table.grid th { background: var(--card); color: #475569; }
+table.grid tr.fila-hoy { background: rgba(29, 78, 216, 0.06); }
+table.grid td.cell:not(.ro):hover { background: rgba(29, 78, 216, 0.09); }
+
+input.txt, select.txt, textarea.txt { background: var(--surface); }
+input.txt:focus, select.txt:focus, textarea.txt:focus {
+  box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.12);
+}
+
+/* Chips de vendedor: fondo tenue + texto oscuro legible -------- */
+.pill.v0 { background: #e3f4ea; color: #12703a; }
+.pill.v1 { background: #e4ecfd; color: #1a4fbf; }
+.pill.v2 { background: #fbeed6; color: #8a5a00; }
+.pill.v3 { background: #fce8f0; color: #a3196a; }
+.pill.v4 { background: #fde9e7; color: #b3261e; }
+.pill.v5 { background: #ddf1ed; color: #0f6e63; }
+.pill.v6 { background: #e8e9fc; color: #3d3ab5; }
+.pill.v7 { background: #fdeaee; color: #ad1f43; }
+.pill.v8 { background: #ddeff7; color: #0e6a8a; }
+.pill.v9 { background: #fdeddf; color: #9a4b06; }
+.pill.v10 { background: #f0e9fc; color: #6b34ba; }
+.pill.v11 { background: #edf4dc; color: #4f6b12; }
+
+.badge { background: #e8ecf3; color: #526077; }
+.badge.ok { background: #e3f4ea; color: var(--ok); }
+.badge.err { background: #fde9e7; color: var(--err); }
+.badge.warn { background: #fbeed6; color: var(--warn); }
+.badge.info { background: #e4ecfd; color: var(--accent); }
+
+.mio-turno-row .turno-badge.M { background: #e4ecfd; color: var(--c2); }
+.mio-turno-row .turno-badge.T { background: #fbeed6; color: var(--c3); }
+.mio-turno-row.hoy { background: rgba(29, 78, 216, 0.07); }
+
+.role-tag { background: #e8ecf3; color: #526077; }
+.role-tag.admin { background: #fde9e7; color: var(--err); }
+.role-tag.vend { background: #e4ecfd; color: var(--c2); }
+
+.info-box { background: rgba(29, 78, 216, 0.06); }
+.warn-box { background: #fdf6e7; }
+.fix-item .regla, .historial-item .regla-txt { background: #e4ecfd; color: var(--accent); }
+.historial-item .regla-txt { padding: 1px 5px; border-radius: 3px; }
+.fix-item.applied { background: #f2faf5; }
+.fix-item.rejected { background: #fdf4f3; }
+
+.modal-backdrop { background: rgba(16, 24, 40, 0.45); }
+
+/* Pantalla de acceso ------------------------------------------ */
+.demo-btn:hover { border-color: var(--accent); background: #e9effc; }
+body.es-demo .demo-chip {
+  background: #e4ecfd;
+  color: var(--accent);
+  border: 1px solid #c3d4fa;
+}
+
+/* .regla-txt del historial es texto corrido, no una etiqueta: se anula
+   el fondo de chip que le llega por venir agrupado con .fix-item .regla. */
+.historial-item .regla-txt { background: none; }
+
+/* ============================================================
+   MARCA
+   ============================================================ */
+header .brand { display: flex; align-items: center; letter-spacing: -0.01em; }
+.brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+  font-size: 12px;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+.login-box h1 { display: flex; align-items: center; }
+.login-box h1 .brand-mark { width: 30px; height: 30px; border-radius: 8px; font-size: 15px; margin-right: 10px; }
+
+/* ============================================================
+   PULIDO GENERAL
+   ============================================================ */
+/* Transiciones suaves en los controles interactivos: el detalle que separa
+   una interfaz "que funciona" de una que se siente terminada. */
+.btn-primary, .btn-secondary, .btn-ai,
+input.txt, select.txt, textarea.txt,
+header nav.tabs button, header .userbox button,
+.demo-btn, .mio-turno-row .pedir {
+  transition: background-color .15s ease, border-color .15s ease,
+    box-shadow .15s ease, color .15s ease;
+}
+
+.btn-primary:hover:not(:disabled) { background: var(--accent-hover); filter: none; }
+.btn-secondary:hover:not(:disabled) { background: var(--card); }
+
+/* La pestaña activa lleva un tinte de marca, no gris neutro. */
+header nav.tabs button.active { background: var(--accent-soft); }
+
+/* Elevación consistente en las superficies flotantes. */
+.modal { box-shadow: var(--sombra-md); }
+
+::selection { background: var(--accent-soft); color: var(--text); }

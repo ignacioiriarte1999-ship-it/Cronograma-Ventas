@@ -110,7 +110,7 @@ function htmlSidebar(mod, totales, editable, clave) {
       <input type="date" class="txt" id="fer-fecha-${mod.id}"
              min="${mod.desde || INICIO_SEMESTRE}" max="${mod.hasta || FIN_SEMESTRE}" />
       <input type="text" class="txt" id="fer-nombre-${mod.id}" placeholder="Motivo" maxlength="120" />
-      <button class="btn-secondary" data-accion="agregar-feriado" data-mod="${mod.id}">＋</button>
+      <button class="btn-secondary" data-accion="agregar-feriado" data-mod="${mod.id}">+</button>
     </div>
   </div>`;
 
@@ -119,7 +119,7 @@ function htmlSidebar(mod, totales, editable, clave) {
     <div class="btn-col">
       <button class="btn-secondary" data-accion="revisar" data-mod="${mod.id}">Revisar cambios recientes</button>
       <button class="btn-secondary" data-accion="revisar-todo" data-mod="${mod.id}">Revisar todo el semestre</button>
-      <button class="btn-ai" data-accion="corregir-auto" data-mod="${mod.id}">⚡ Corregir automáticamente</button>
+      <button class="btn-ai" data-accion="corregir-auto" data-mod="${mod.id}">Corregir automáticamente</button>
     </div>
     <div class="muted small">Aplica en cadena las correcciones seguras y se detiene cuando no quedan más cambios posibles.</div>
   </div>`;
@@ -140,7 +140,7 @@ function htmlSidebar(mod, totales, editable, clave) {
   </div>`;
 
   html += `<div class="panel">
-    <button class="btn-secondary full" data-accion="exportar" data-mod="${mod.id}">📥 Exportar CSV</button>
+    <button class="btn-secondary full" data-accion="exportar" data-mod="${mod.id}">Exportar CSV</button>
   </div>`;
 
   return html;
@@ -247,7 +247,7 @@ function htmlDias(mod, lunes, editable, hoy) {
       continue;
     }
     if (c.holiday) {
-      html += `<tr${trCls}><td class="dia">${diaLbl}</td><td colspan="2" class="feriado">🎉 FERIADO: ${esc(mod.feriados[iso] || 'feriado')}</td></tr>`;
+      html += `<tr${trCls}><td class="dia">${diaLbl}</td><td colspan="2" class="feriado">Feriado: ${esc(mod.feriados[iso] || 'feriado')}</td></tr>`;
       continue;
     }
 

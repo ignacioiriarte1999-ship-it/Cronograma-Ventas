@@ -3,13 +3,13 @@
   "configurations": [
     {
       "name": "cronogramas",
-      "runtimeExecutable": "python3",
+      "runtimeExecutable": "sh",
       "runtimeArgs": [
-        "herramientas/servidor.py",
-        "8137",
-        "public"
+        "-c",
+        "exec python3 herramientas/servidor.py \"${PORT:-8137}\" public"
       ],
-      "port": 8137
+      "port": 8137,
+      "autoPort": true
     }
   ]
 }

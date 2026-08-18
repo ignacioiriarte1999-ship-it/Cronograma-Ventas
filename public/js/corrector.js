@@ -66,7 +66,7 @@ function mostrarModal(fixes, revisadas, salteadas) {
   document.getElementById('modal-fixes-summary').innerHTML =
     `Se revisaron <b>${revisadas}</b> semana(s) (${salteadas} sin cambios desde la última revisión). ` +
     (fixes.length === 0
-      ? '<span class="ok-txt">Sin problemas detectados. 🎉</span>'
+      ? '<span class="ok-txt">Sin problemas detectados.</span>'
       : `Se detectaron <b>${fixes.length}</b> problema(s).`);
 
   const conFix = fixes.filter((f) => f.problema.autoFix).length;
@@ -201,7 +201,7 @@ export async function corregirAutomatico(mod) {
 }
 
 function mostrarResumen(stats) {
-  document.getElementById('modal-ia-titulo').textContent = '⚡ Resultado de la corrección automática';
+  document.getElementById('modal-ia-titulo').textContent = 'Resultado de la corrección automática';
   document.getElementById('modal-ia-body').innerHTML = `
     <div class="info-box">Se revisó el cronograma en cadena, aplicando las reglas de mayor a menor prioridad.</div>
     <div class="stat-row"><span class="lbl">Pasadas</span><span class="val">${stats.iters}</span></div>

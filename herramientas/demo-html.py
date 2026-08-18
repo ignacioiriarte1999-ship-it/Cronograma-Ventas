@@ -22,18 +22,15 @@ def transformar(html):
     out = out.replace('<title>Cronogramas — ContacCenter · Laprida 235</title>',
                       '<title>Cronogramas — demostración</title>')
     out = out.replace('href="css/styles.css"', 'href="../css/styles.css"')
-    out = out.replace('<meta name="theme-color" content="#0d1017" />',
-                      '<meta name="theme-color" content="#ffffff" />')
     out = out.replace('src="js/main.js"', 'src="../js/main.js"')
     # El marcador es lo que decide el modo demo: así no depende de la ruta ni
     # del dominio, y el mismo archivo sirve en /demo o en la raíz de un dominio
     # propio. Va como script clásico para que corra antes que los módulos.
-    # demo.css va después de styles.css: reescribe los tokens al tema
-    # claro sin tocar el de la app real.
+    # El tema ya es el mismo en los dos: no hace falta una segunda hoja de
+    # estilos que repinte nada.
     out = out.replace(
         '<link rel="stylesheet" href="../css/styles.css" />',
         '<link rel="stylesheet" href="../css/styles.css" />\n'
-        '<link rel="stylesheet" href="../css/demo.css" />\n'
         '<script>window.__CRONO_DEMO__ = true;</script>')
     # Sin la marca del cliente ni la ayuda con apellidos reales: main.js las
     # reemplaza al arrancar, pero así no parpadean antes de que corra.

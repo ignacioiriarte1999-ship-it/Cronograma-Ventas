@@ -82,7 +82,7 @@ les llega nada, y el reseteo hay que hacerlo desde el panel de Supabase.
 
 ### 6. Dar de alta al resto de los usuarios
 
-Entrá a la app como admin y abrí **⚙️ Configuración**. Hay dos caminos:
+Entrá a la app como admin y abrí **Configuración**. Hay dos caminos:
 
 **Uno por uno** — con el formulario *Crear usuario*, eligiendo vos el nombre y
 la contraseña:
@@ -170,7 +170,7 @@ El pedido queda **pendiente hasta que un admin lo aprueba**.
 1. En **Mi horario**, cada turno futuro tiene un botón *Pedir cambio*.
 2. Elige con quién y cuál de los turnos de esa persona toma, con un motivo
    opcional.
-3. Al admin le aparece un contador **🔄 Cambios** en el encabezado, en el
+3. Al admin le aparece un contador **Cambios** en el encabezado, en el
    momento, vía Realtime.
 4. El admin aprueba o rechaza, con una nota opcional.
 
@@ -283,7 +283,7 @@ Eso importa porque respeta las permutas hechas a mano. En los datos reales de
 Laprida, por ejemplo, la semana del 27/07 tiene un intercambio entre compañeros:
 recalcular desde las reglas lo borraría, continuar la cola lo conserva.
 
-También hay un botón manual en **⚙️ → Cronograma** para forzarlo antes de tiempo.
+También hay un botón manual en **Configuración → Cronograma** para forzarlo antes de tiempo.
 
 ### Feriados del año nuevo
 
