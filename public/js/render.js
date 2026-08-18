@@ -2,6 +2,7 @@
 //  RENDERIZADO
 // ============================================================
 import { getSession, esAdmin } from './auth.js';
+import { nom, local, texto } from './alias.js';
 import { getModulo, listaModulos } from './modules.js';
 import { INICIO_SEMESTRE, FIN_SEMESTRE } from './config.js';
 import {
@@ -80,7 +81,7 @@ function htmlSidebar(mod, totales, editable, clave) {
     <h2>Estadísticas de ${esc(etiquetaDe(clave))}</h2>
     ${mod.vendedores.map((v) => `
       <div class="stat-row">
-        <span class="lbl"><span class="pill ${mod.pillClass(v)}">${esc(v)}</span></span>
+        <span class="lbl"><span class="pill ${mod.pillClass(v)}">${esc(nom(v))}</span></span>
         <span class="val">${totales[v].total}
           <span class="val-detalle">(M:${totales[v].M} T:${totales[v].T} S:${totales[v].S})</span>
         </span>
@@ -131,8 +132,8 @@ function htmlSidebar(mod, totales, editable, clave) {
         <div class="historial-item ${esc(h.estado)}">
           <div class="ts">${new Date(h.ts).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
             — <span class="regla-txt">${esc(h.regla)}</span></div>
-          <div class="desc">${esc(h.descripcion)}</div>
-          ${h.diff ? `<div class="diff"><span class="before">${esc(h.diff.antes)}</span> → <span class="after">${esc(h.diff.despues)}</span></div>` : ''}
+          <div class="desc">${esc(texto(h.descripcion))}</div>
+          ${h.diff ? `<div class="diff"><span class="before">${esc(texto(h.diff.antes))}</span> → <span class="after">${esc(texto(h.diff.despues))}</span></div>` : ''}
         </div>`).join('')}
     </div>
     ${mod.historial.length ? `<button class="btn-secondary full mt-8" data-accion="limpiar-historial" data-mod="${mod.id}">Limpiar historial</button>` : ''}
@@ -161,8 +162,8 @@ function htmlSemanas(mod, semanas, editable, periodos, clave, totalSemanas) {
   ).join('');
   let html = `<div class="cron-title">
     <div>
-      <h1>${esc(mod.nombre)}</h1>
-      <div class="sub">${esc(mod.subtitulo)}</div>
+      <h1>${esc(local(mod.id, mod.nombre))}</h1>
+      <div class="sub">${esc(texto(mod.subtitulo))}</div>
     </div>
     <div class="periodo-sel">
       ${periodos.length > 1 ? `<select class="txt" data-accion="periodo" data-mod="${mod.id}">${opciones}</select>` : ''}
@@ -197,7 +198,7 @@ function htmlSemanas(mod, semanas, editable, periodos, clave, totalSemanas) {
       const cierra = sabIso && !mod.cronograma[sabIso]?.holiday
         ? mod.cronograma[sabIso]?.manana : null;
       if (abre || cierra) {
-        ciclo = `<span class="badge">Abre ${esc(abre || '—')} → Cierra ${esc(cierra || '—')}</span>`;
+        ciclo = `<span class="badge">Abre ${esc(nom(abre) || '—')} → Cierra ${esc(nom(cierra) || '—')}</span>`;
       }
     }
 
@@ -217,7 +218,7 @@ function htmlSemanas(mod, semanas, editable, periodos, clave, totalSemanas) {
     if (problemas.length > 0) {
       html += '<div class="problemas">';
       for (const p of problemas) {
-        html += `<div class="${p.severidad === 'err' ? 'p-err' : 'p-warn'}"><b>[${esc(p.regla)}]</b> ${esc(p.descripcion)}</div>`;
+        html += `<div class="${p.severidad === 'err' ? 'p-err' : 'p-warn'}"><b>[${esc(p.regla)}]</b> ${esc(texto(p.descripcion))}</div>`;
       }
       html += '</div>';
     }
@@ -252,10 +253,10 @@ function htmlDias(mod, lunes, editable, hoy) {
 
     const esSabado = d.getDay() === 6;
     const cellM = c.manana
-      ? `<span class="pill ${mod.pillClass(c.manana)}">${esc(c.manana)}</span>`
+      ? `<span class="pill ${mod.pillClass(c.manana)}">${esc(nom(c.manana))}</span>`
       : '<span class="muted">—</span>';
     const cellT = c.tarde
-      ? `<span class="pill ${mod.pillClass(c.tarde)}">${esc(c.tarde)}</span>`
+      ? `<span class="pill ${mod.pillClass(c.tarde)}">${esc(nom(c.tarde))}</span>`
       : (esSabado ? '<span class="muted italic">solo mañana</span>' : '<span class="muted">—</span>');
 
     const attrM = editable ? `data-accion="rotar" data-mod="${mod.id}" data-iso="${iso}" data-turno="manana"` : '';
@@ -301,9 +302,9 @@ function objetivoMiHorario(sess) {
 
 function selectorVendedor(elegido) {
   const grupos = listaModulos().map((m) => `
-    <optgroup label="${esc(m.nombre)}">
+    <optgroup label="${esc(local(m.id, m.nombre))}">
       ${m.vendedores.map((v) => `
-        <option value="${m.id}|${esc(v)}"${elegido === v ? ' selected' : ''}>${esc(v)}</option>`).join('')}
+        <option value="${m.id}|${esc(v)}"${elegido === v ? ' selected' : ''}>${esc(nom(v))}</option>`).join('')}
     </optgroup>`).join('');
   return `<div class="mio-selector">
     <label for="mio-vend">Ver el horario de</label>
@@ -346,8 +347,8 @@ export function renderMiHorario() {
   const totS = turnos.filter((t) => t.turno === 'manana' && fromISO(t.iso).getDay() === 6).length;
 
   let html = `<div class="mio-header">
-    <h2>${propio ? `Hola, ${esc(vendedor)}` : esc(vendedor)}</h2>
-    <p>${propio ? 'Tu horario' : 'Horario'} en ${esc(mod.nombre)} · ${mod.desde || INICIO_SEMESTRE} → ${mod.hasta || FIN_SEMESTRE}</p>
+    <h2>${propio ? `Hola, ${esc(nom(vendedor))}` : esc(nom(vendedor))}</h2>
+    <p>${propio ? 'Tu horario' : 'Horario'} en ${esc(local(mod.id, mod.nombre))} · ${mod.desde || INICIO_SEMESTRE} → ${mod.hasta || FIN_SEMESTRE}</p>
   </div>
   <div class="mio-body">${propio ? '' : selectorVendedor(vendedor)}`;
 

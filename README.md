@@ -204,6 +204,44 @@ registro que respalda el cambio si después alguien lo discute.
 
 ---
 
+## Modo demo
+
+Para mandarle una demostración funcional a un tercero sin exponer datos reales
+ni tocar la base de producción.
+
+**Cómo se activa**: agregando `?demo=1` a la URL, o desde un dominio que empiece
+con `demo.` — por ejemplo un segundo proyecto de Vercel apuntado al mismo repo
+con el dominio `demo-cronogramas.vercel.app`. Esa segunda variante es la
+preferible: el link queda limpio y no hay parámetro que perder.
+
+**Qué cambia**:
+
+| | Producción | Demo |
+|---|---|---|
+| Datos | Supabase | En memoria, generados al abrir |
+| Nombres | Los reales | Apellidos de fantasía |
+| Locales | ContacCenter · Laprida 235 | Sucursal Centro · Sucursal Norte |
+| Ingreso | Usuario y contraseña | Botones de acceso por perfil |
+| Escrituras | Persisten | Se pierden al recargar |
+
+**Qué NO cambia**: las reglas, el corrector, los intercambios, la extensión
+automática y todas las vistas. El prospecto ve el producto real, no una maqueta.
+
+Se implementa reemplazando una sola pieza —el cliente de datos— por una versión
+en memoria con la misma superficie ([`demo.js`](public/js/demo.js)), así que la
+lógica de negocio no tiene ninguna rama `if (demo)`.
+
+La traducción de nombres es **sólo al mostrar**
+([`alias.js`](public/js/alias.js)). Internamente siguen siendo los reales,
+porque las reglas de ContacCenter están escritas sobre nombres concretos
+("Imbaud debe tener 2 mañanas") y reescribir esa lógica verificada por una
+demo no valdría la pena.
+
+La demo arranca con un pedido de cambio pendiente, para que esa función se vea
+sin tener que crearla.
+
+---
+
 ## Extensión automática
 
 El cronograma se continúa solo. Cuando entra un admin y quedan **menos de 180

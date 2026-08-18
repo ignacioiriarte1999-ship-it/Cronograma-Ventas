@@ -8,6 +8,8 @@ import {
 } from './auth.js';
 import { MIN_PASS, passInicial, PADRON } from './config.js';
 import { esc, fromISO, formatShort, formatLargo, hoyISO } from './utils.js';
+import { nom, local } from './alias.js';
+import { DEMO } from './db.js';
 import { getModulo, listaModulos } from './modules.js';
 import { HORIZONTE_MINIMO_DIAS, objetivoDeCobertura, diasRestantes } from './schedule.js';
 import { renderCronograma, renderMiHorario, elegirPeriodo, elegirVendedor, setPedidosPropios } from './render.js';
@@ -22,6 +24,26 @@ import {
 const $ = (id) => document.getElementById(id);
 let tabActual = null;
 let cargado = false;
+
+// ------------------------------------------------------------
+//  MODO DEMO
+// ------------------------------------------------------------
+// La siembra va antes de resolver la sesión: si no, la app consultaría tablas
+// todavía vacías. El import es dinámico para no cargar el módulo en producción.
+if (DEMO) {
+  const { sembrarDemo, USUARIOS_DEMO } = await import('./demo.js');
+  await sembrarDemo();
+  document.body.classList.add('es-demo');
+  $('demo-accesos').innerHTML = '<div class="demo-titulo">Demostración — elegí con qué perfil entrar</div>'
+    + USUARIOS_DEMO.map((u) => `<button class="demo-btn" data-accion="demo-entrar"
+        data-usuario="${u.usuario}" data-pass="${u.pass}">${esc(u.etiqueta)}</button>`).join('')
+    + '<div class="demo-nota">Datos de ejemplo. Podés editar lo que quieras: nada se guarda '
+    + 'y al recargar la página vuelve al estado inicial.</div>';
+  $('demo-accesos').style.display = 'block';
+  document.querySelector('#login-screen .sub').textContent = 'Gestión de turnos por sucursal';
+  document.querySelector('#login-screen .login-hint').remove();
+  document.title = 'Cronogramas — demostración';
+}
 
 // ------------------------------------------------------------
 //  SESIÓN
@@ -75,7 +97,7 @@ async function iniciarApp(sess) {
   }
   $('pass-gate').style.display = 'none';
   $('app-shell').style.display = 'block';
-  $('user-info').textContent = sess.user + (sess.vendedor ? ` (${sess.vendedor})` : '') + ` — ${sess.rol}`;
+  $('user-info').textContent = sess.user + (sess.vendedor ? ` (${nom(sess.vendedor)})` : '') + ` — ${sess.rol}`;
 
   if (cargado) return;
   cargado = true;
@@ -83,18 +105,18 @@ async function iniciarApp(sess) {
   armarTabs(sess);
   for (const mod of listaModulos()) {
     mod.onCambio = alCambiarModulo;
-    avisoEnPanel(mod, `Cargando ${esc(mod.nombre)}…`);
+    avisoEnPanel(mod, `Cargando ${esc(local(mod.id, mod.nombre))}…`);
 
     let ok = false;
     try {
       ok = await mod.cargar();
     } catch (e) {
       console.error(`Cargando ${mod.id}:`, e);
-      avisoEnPanel(mod, `No se pudo cargar ${esc(mod.nombre)}.`, e.message);
+      avisoEnPanel(mod, `No se pudo cargar ${esc(local(mod.id, mod.nombre))}.`, e.message);
       continue;
     }
     if (!ok) {
-      avisoEnPanel(mod, `No se pudo cargar ${esc(mod.nombre)}.`,
+      avisoEnPanel(mod, `No se pudo cargar ${esc(local(mod.id, mod.nombre))}.`,
         'Revisá la consola del navegador para ver el detalle.');
       continue;
     }
@@ -105,7 +127,7 @@ async function iniciarApp(sess) {
         console.info(`Sembrando el cronograma inicial de ${mod.nombre}…`);
         await mod.regenerar();
       } else {
-        avisoEnPanel(mod, `${esc(mod.nombre)} todavía no tiene turnos cargados.`,
+        avisoEnPanel(mod, `${esc(local(mod.id, mod.nombre))} todavía no tiene turnos cargados.`,
           'Pedile al administrador que los genere.');
         continue;
       }
@@ -138,7 +160,7 @@ async function revisarHorizonte() {
 
     console.info(`${mod.nombre}: quedan ${restan} días de cronograma, extendiendo hasta ${objetivo}…`);
     const r = await mod.extenderHasta(objetivo);
-    if (r.ok) hechos.push({ nombre: mod.nombre, restan, ...r });
+    if (r.ok) hechos.push({ nombre: local(mod.id, mod.nombre), restan, ...r });
     else console.warn(`No se extendió ${mod.nombre}: ${r.motivo}`);
   }
 
@@ -171,7 +193,7 @@ async function hacerExtender(btn) {
   const hechos = [];
   for (const mod of listaModulos()) {
     const r = await mod.extenderHasta(objetivo);
-    if (r.ok) hechos.push({ nombre: mod.nombre, ...r });
+    if (r.ok) hechos.push({ nombre: local(mod.id, mod.nombre), ...r });
     else console.info(`${mod.nombre}: ${r.motivo}`);
   }
   btn.disabled = false;
@@ -239,7 +261,7 @@ function abrirPedirCambio(iso, turno) {
       <label for="cb-comp">Con quién</label>
       <select class="txt" id="cb-comp" data-accion="cambio-companero">
         <option value="">— elegí un compañero —</option>
-        ${companeros.map((v) => `<option value="${esc(v)}">${esc(v)}</option>`).join('')}
+        ${companeros.map((v) => `<option value="${esc(v)}">${esc(nom(v))}</option>`).join('')}
       </select>
     </div>
 
@@ -351,15 +373,15 @@ function htmlPedido(p) {
 
   return `<div class="pedido ${esc(p.estado)}" id="pedido-${p.id}">
     <div>
-      <span class="quien">${esc(p.pide.nombre)}</span> quiere cambiar con
-      <span class="quien">${esc(p.recibe.nombre)}</span>
-      <span class="muted small">· ${esc(mod?.nombre || p.puntoVenta)}
+      <span class="quien">${esc(nom(p.pide.nombre))}</span> quiere cambiar con
+      <span class="quien">${esc(nom(p.recibe.nombre))}</span>
+      <span class="muted small">· ${esc(local(p.puntoVenta, mod?.nombre || p.puntoVenta))}
       · ${new Date(p.creado).toLocaleDateString('es-AR')}</span>
     </div>
     <div class="trueque">
-      <div class="lado"><b>${esc(p.pide.nombre)}</b> deja<br />${esc(describirTurno(p.pide))}</div>
+      <div class="lado"><b>${esc(nom(p.pide.nombre))}</b> deja<br />${esc(describirTurno(p.pide))}</div>
       <div class="flecha">⇄</div>
-      <div class="lado"><b>${esc(p.recibe.nombre)}</b> deja<br />${esc(describirTurno(p.recibe))}</div>
+      <div class="lado"><b>${esc(nom(p.recibe.nombre))}</b> deja<br />${esc(describirTurno(p.recibe))}</div>
     </div>
     ${p.motivo ? `<div class="motivo">“${esc(p.motivo)}”</div>` : ''}
     ${impacto.length ? `<div class="warn-box mt-8">Si se aprueba, esto queda mal:
@@ -381,8 +403,8 @@ async function resolverPedido(id, aprobar) {
     const aviso = impacto.length
       ? `\n\nATENCIÓN, esto queda mal:\n  · ${impacto.join('\n  · ')}\n\n¿Aprobar igual?`
       : '\n\n¿Confirmás?';
-    if (!confirm(`${p.pide.nombre} ⇄ ${p.recibe.nombre}${aviso}`)) return;
-  } else if (!confirm(`¿Rechazar el pedido de ${p.pide.nombre}?`)) {
+    if (!confirm(`${nom(p.pide.nombre)} ⇄ ${nom(p.recibe.nombre)}${aviso}`)) return;
+  } else if (!confirm(`¿Rechazar el pedido de ${nom(p.pide.nombre)}?`)) {
     return;
   }
 
@@ -427,14 +449,14 @@ function alCambiarModulo(mod) {
 }
 
 function armarTabs(sess) {
-  const todos = listaModulos().map((m) => ({ id: m.id, label: m.nombre }));
+  const todos = listaModulos().map((m) => ({ id: m.id, label: local(m.id, m.nombre) }));
   const propio = getModulo(sess.puntoVenta);
   let tabs;
   let inicial;
 
   if (propio) {
     // Vendedor: su punto de venta y sus propios turnos.
-    tabs = [{ id: propio.id, label: propio.nombre }, { id: 'mio', label: 'Mi horario' }];
+    tabs = [{ id: propio.id, label: local(propio.id, propio.nombre) }, { id: 'mio', label: 'Mi horario' }];
     inicial = 'mio';
   } else {
     // Admin o lector sin vendedor asociado: ve todo y puede consultar el
@@ -524,7 +546,7 @@ function abrirConfig() {
 
       <hr><div class="stat-heading">Cronograma</div>
       <div class="muted small mb-8">${listaModulos().map((m) =>
-        `${esc(m.nombre)}: hasta ${m.hasta || '—'} (${diasRestantes(m.hasta)} días)`).join(' · ')}</div>
+        `${esc(local(m.id, m.nombre))}: hasta ${m.hasta || '—'} (${diasRestantes(m.hasta)} días)`).join(' · ')}</div>
       <button class="btn-secondary" data-accion="extender">Extender hasta fin del año que viene</button>
       <div class="muted small mt-4">Continúa la rotación vigente sin tocar lo ya cargado.
       La app lo hace sola cuando quedan menos de ${HORIZONTE_MINIMO_DIAS} días.</div>
@@ -555,7 +577,7 @@ async function cargarDesplegableVendedores() {
       html += `<optgroup label="${etiqueta}">`;
       for (const v of propios) {
         const usado = ocupados.has(v.nombre) ? ' — ya tiene cuenta' : '';
-        html += `<option value="${v.id}">${esc(v.nombre)}${usado}</option>`;
+        html += `<option value="${v.id}">${esc(nom(v.nombre))}${usado}</option>`;
       }
       html += '</optgroup>';
     }
@@ -603,7 +625,7 @@ async function cargarUsuarios() {
     const faltantes = PADRON.filter((p) => !usuarios.some((u) => u.user === p.user));
 
     let html = '';
-    if (faltantes.length > 0) {
+    if (faltantes.length > 0 && !DEMO) {
       html += `<div class="info-box">Faltan dar de alta <b>${faltantes.length}</b> usuario(s):
         ${esc(faltantes.map((f) => f.user).join(', '))}</div>
         <button class="btn-primary mb-8" data-accion="crear-padron">Crear los ${faltantes.length} usuarios faltantes</button>`;
@@ -611,7 +633,7 @@ async function cargarUsuarios() {
 
     html += `<div class="user-list">${usuarios.map((u) => `
       <div class="user-row">
-        <div>${esc(u.user)} ${u.vendedor ? `<span class="muted">(${esc(u.vendedor)})</span>` : ''}
+        <div>${esc(u.user)} ${u.vendedor ? `<span class="muted">(${esc(nom(u.vendedor))})</span>` : ''}
           <span class="role-tag ${u.rol === 'admin' ? 'admin' : 'vend'}">${esc(u.rol)}</span></div>
         <div class="muted small">${u.puntoVenta ? esc(u.puntoVenta.toUpperCase()) : '—'}</div>
         <div class="muted small">${u.passCambiada ? '🔒 propia' : '🔓 inicial'}</div>
@@ -684,6 +706,11 @@ document.addEventListener('click', (ev) => {
 
   switch (accion) {
     case 'login': hacerLogin(); break;
+    case 'demo-entrar':
+      $('li-user').value = el.dataset.usuario;
+      $('li-pass').value = el.dataset.pass;
+      hacerLogin();
+      break;
     case 'logout': logout(); break;
     case 'tab': cambiarTab(tab); break;
 

@@ -3,8 +3,11 @@
 // ============================================================
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.58.0';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
+import { esDemo, crearClienteDemo } from './demo.js';
 
-if (SUPABASE_URL.startsWith('PEGAR')) {
+export const DEMO = esDemo();
+
+if (!DEMO && SUPABASE_URL.startsWith('PEGAR')) {
   document.body.innerHTML = `<div style="padding:40px;font-family:system-ui;color:#e6e9f2;background:#0d1017;min-height:100vh">
     <h2>Falta configurar Supabase</h2>
     <p style="color:#7d8399;margin-top:8px">Completá <code>SUPABASE_URL</code> y <code>SUPABASE_ANON_KEY</code>
@@ -13,9 +16,12 @@ if (SUPABASE_URL.startsWith('PEGAR')) {
   throw new Error('Supabase sin configurar');
 }
 
-export const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: { persistSession: true, autoRefreshToken: true },
-});
+// En demo, un backend en memoria con la misma superficie: la app no distingue.
+export const sb = DEMO
+  ? crearClienteDemo()
+  : createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { persistSession: true, autoRefreshToken: true },
+  });
 
 /**
  * Cliente descartable para dar de alta cuentas.
@@ -25,6 +31,7 @@ export const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
  * pierde la suya.
  */
 export function clienteAislado() {
+  if (DEMO) return sb;
   return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: { persistSession: false, autoRefreshToken: false, storageKey: 'alta-temporal' },
   });
@@ -40,6 +47,10 @@ export function vigilarConexion(elId = 'conn-status') {
     el.title = estado === 'ok' ? 'Sincronizado' : 'Sin conexión — mostrando la última copia local';
   };
   pintar(navigator.onLine ? 'ok' : 'off');
+  if (DEMO) {
+    const el = document.getElementById(elId);
+    if (el) el.title = 'Modo demo — los datos son de ejemplo y no se guardan';
+  }
   window.addEventListener('online', () => pintar('ok'));
   window.addEventListener('offline', () => pintar('off'));
 }
