@@ -23,6 +23,13 @@ def transformar(html):
                       '<title>Cronogramas — demostración</title>')
     out = out.replace('href="css/styles.css"', href_demo := 'href="../css/styles.css"')
     out = out.replace('src="js/main.js"', 'src="../js/main.js"')
+    # El marcador es lo que decide el modo demo: así no depende de la ruta ni
+    # del dominio, y el mismo archivo sirve en /demo o en la raíz de un dominio
+    # propio. Va como script clásico para que corra antes que los módulos.
+    out = out.replace(
+        '<link rel="stylesheet" href="../css/styles.css" />',
+        '<link rel="stylesheet" href="../css/styles.css" />\n'
+        '<script>window.__CRONO_DEMO__ = true;</script>')
     # Sin la marca del cliente ni la ayuda con apellidos reales: main.js las
     # reemplaza al arrancar, pero así no parpadean antes de que corra.
     out = out.replace('<p class="sub">ContacCenter · Laprida 235</p>',

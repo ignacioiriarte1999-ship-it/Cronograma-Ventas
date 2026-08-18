@@ -209,8 +209,22 @@ registro que respalda el cambio si después alguien lo discute.
 Para mandarle una demostración funcional a un tercero sin exponer datos reales
 ni tocar la base de producción.
 
-**La demo vive en `public/demo/`** y se sirve en la ruta `/demo`, que es el link
-para mandar. También se activa con `?demo=1` sobre la app normal, o desde un
+**La demo vive en `public/demo/`.** El modo demo no lo decide la URL sino el
+propio HTML, que trae un marcador `window.__CRONO_DEMO__`. Por eso el mismo
+archivo funciona servido en `/demo` o en la raíz de un dominio aparte, sin
+tocar código.
+
+### Darle un dominio propio
+
+Conviene: si mandás `tu-app.vercel.app/demo`, el prospecto ve la URL de
+producción del cliente y puede llegar al login real.
+
+En Vercel → tu proyecto → **Settings → Domains → Add**, agregá un dominio que
+contenga `demo` (por ejemplo `cronogramas-demo.vercel.app`). El `vercel.json` ya
+trae la regla que, en cualquier host con `demo` en el nombre, sirve la demo en
+la raíz. No hace falta un segundo proyecto ni duplicar nada.
+
+La ruta `/demo` sigue funcionando en los dos dominios. También se activa con `?demo=1` sobre la app normal, o desde un
 dominio que empiece con `demo.`.
 
 Ese `index.html` **se genera**, no se edita: es el de producción con la marca del

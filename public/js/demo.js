@@ -16,8 +16,8 @@ import { definirAlias } from './alias.js';
 // ------------------------------------------------------------
 //  DETECCIÓN
 // ------------------------------------------------------------
-// Se activa desde /demo/, con ?demo en la URL, o con un host que empiece con
-// "demo.".
+// Lo decide el HTML que se cargó: public/demo/index.html trae un marcador. Como
+// respaldo se acepta ?demo en la URL y un host de demostración.
 //
 // Se decide SÓLO por la URL, sin recordarlo en la sesión. Antes quedaba anotado
 // en sessionStorage para sobrevivir a un recargado, pero eso hacía que después
@@ -26,9 +26,12 @@ import { definirAlias } from './alias.js';
 // /demo ya sobrevive al recargado por sí sola.
 
 export function esDemo() {
-  return location.pathname.startsWith('/demo')
-    || new URLSearchParams(location.search).has('demo')
-    || location.hostname.startsWith('demo.');
+  // El marcador lo pone el propio HTML de la demo, así que vale igual en /demo,
+  // en la raíz de un dominio de demostración o abierto desde el disco. Los
+  // otros dos casos quedan como atajo para probar sobre el index de producción.
+  if (window.__CRONO_DEMO__ === true) return true;
+  return new URLSearchParams(location.search).has('demo')
+    || /(^|[.-])demo([.-]|$)/.test(location.hostname);
 }
 
 /** Limpia el rastro que dejaban las versiones anteriores. */

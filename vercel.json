@@ -38,5 +38,27 @@
         }
       ]
     }
+  ],
+  "rewrites": [
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": ".*demo.*"
+        }
+      ],
+      "destination": "/demo/index.html"
+    },
+    {
+      "source": "/index.html",
+      "has": [
+        {
+          "type": "host",
+          "value": ".*demo.*"
+        }
+      ],
+      "destination": "/demo/index.html"
+    }
   ]
 }
