@@ -436,6 +436,70 @@ async function hacerCancelarPedido(id) {
   }
 }
 
+
+// ------------------------------------------------------------
+//  EDICIÓN DE UNA CELDA DEL CRONOGRAMA
+// ------------------------------------------------------------
+// Al hacer clic en un turno se abre un desplegable con todo el padrón. Antes
+// cada clic rotaba al siguiente de la lista: con doce vendedores en Laprida,
+// poner a la última persona costaba once clics y pasarse obligaba a dar toda
+// la vuelta otra vez.
+//
+// Se usa un <select> nativo a propósito: en el celular abre el selector del
+// sistema —cómodo con el pulgar— y trae gratis el teclado y el lector de
+// pantalla, que una lista hecha a mano habría que reimplementar.
+
+let celdaEnEdicion = null;   // { cerrar } del desplegable abierto, si hay uno
+
+function abrirSelectorCelda(td, mod, iso, turno) {
+  if (!esAdmin()) return;
+  if (celdaEnEdicion?.td === td) return;   // ya está abierto acá
+  celdaEnEdicion?.cerrar();                // sólo uno a la vez
+
+  const actual = mod.cronograma[iso]?.[turno] || '';
+  const opciones = ['<option value="">— sin asignar —</option>'].concat(
+    mod.vendedores.map((v) => `<option value="${esc(v)}"${v === actual ? ' selected' : ''}>`
+      + `${esc(nom(v))}</option>`),
+  ).join('');
+
+  const previo = td.innerHTML;
+  td.innerHTML = `<select class="celda-sel" aria-label="Vendedor del turno">${opciones}</select>`;
+  const sel = td.querySelector('select');
+
+  let resuelto = false;
+  const cerrar = (restaurar = true) => {
+    if (resuelto) return;
+    resuelto = true;
+    celdaEnEdicion = null;
+    document.removeEventListener('pointerdown', afuera, true);
+    if (restaurar) td.innerHTML = previo;
+  };
+  // Cerrar por clic afuera y no sólo por blur: el <select> puede no llegar a
+  // tomar el foco —pasa en algunos móviles—, y entonces el blur nunca llega y
+  // el desplegable se queda abierto para siempre.
+  function afuera(ev) { if (!td.contains(ev.target)) cerrar(); }
+  document.addEventListener('pointerdown', afuera, true);
+
+  celdaEnEdicion = { td, cerrar };
+
+  sel.addEventListener('change', () => {
+    const elegido = sel.value || null;
+    // Si eligió el mismo que ya estaba, asignarCelda no cambia nada y no hay
+    // re-render que repinte la celda: hay que restaurarla acá.
+    const mismo = (mod.cronograma[iso]?.[turno] || null) === elegido;
+    cerrar(mismo);
+    if (!mismo) mod.asignarCelda(iso, turno, elegido);
+  });
+  sel.addEventListener('blur', () => cerrar());
+  sel.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') cerrar(); });
+
+  sel.focus();
+  // Abre la lista sin un segundo clic donde el navegador lo permite. Exige un
+  // gesto del usuario, así que lanza si se llega acá por código; el foco ya
+  // está puesto, se despliega con un clic o con las flechas.
+  try { sel.showPicker?.(); } catch (e) { /* sin gesto de usuario */ }
+}
+
 /** Mensaje a pantalla completa dentro de la pestaña de un cronograma. */
 function avisoEnPanel(mod, titulo, detalle = '') {
   const panel = $(`tab-${mod.id}`);
@@ -735,7 +799,7 @@ document.addEventListener('click', (ev) => {
     case 'pass-gate-submit': hacerCambioObligatorio(); break;
     case 'pass-gate-salir': logout(); break;
 
-    case 'rotar': mod?.rotarCelda(iso, turno); break;
+    case 'editar-celda': if (mod) abrirSelectorCelda(el, mod, iso, turno); break;
     case 'agregar-feriado': agregarFeriado(mod); break;
     case 'quitar-feriado':
       if (confirm(`¿Quitar el feriado del ${formatShort(fromISO(iso))}?`)) mod.quitarFeriado(iso);

@@ -140,7 +140,8 @@ dos pestañas: el cronograma de su punto de venta en **solo lectura**, y
 
 Ve los dos cronogramas y puede editarlos:
 
-- **Clic en una celda** rota el vendedor asignado a ese turno.
+- **Clic en una celda** abre un desplegable con todo el padrón para elegir
+  quién cubre ese turno, o dejarlo sin asignar. `Esc` o un clic afuera cancela.
 - **Feriados**: agregar o quitar. El día queda cerrado y libera sus turnos.
 - **Corrector**: revisa las reglas de cada semana y propone los intercambios que
   las resuelven, para aprobarlos de a uno o todos juntos.

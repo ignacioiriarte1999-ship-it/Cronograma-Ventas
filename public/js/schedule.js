@@ -239,13 +239,22 @@ export function crearModulo(config) {
       return true;
     },
 
-    rotarCelda(iso, turno) {
+    /**
+     * Pone a un vendedor en un turno, o lo deja vacío con null.
+     *
+     * Antes esto rotaba al siguiente del padrón en cada clic. Con doce
+     * vendedores en Laprida, corregir un turno podía costar once clics y era
+     * fácil pasarse; ahora la interfaz abre un desplegable y elige directo.
+     */
+    asignarCelda(iso, turno, vendedor) {
       const c = this.cronograma[iso];
-      if (!c || c.holiday || c.closed) return;
-      const idx = c[turno] ? this.vendedores.indexOf(c[turno]) : -1;
-      const siguiente = (idx + 1) % (this.vendedores.length + 1);
-      const vendedor = siguiente < this.vendedores.length ? this.vendedores[siguiente] : null;
-      return this.aplicarCambios([{ iso, turno, vendedor }]);
+      if (!c || c.holiday || c.closed) return false;
+      if (vendedor && !this.vendedores.includes(vendedor)) {
+        console.warn(`Vendedor desconocido: ${vendedor}`);
+        return false;
+      }
+      if ((c[turno] || null) === (vendedor || null)) return false;   // nada que hacer
+      return this.aplicarCambios([{ iso, turno, vendedor: vendedor || null }]);
     },
 
     async agregarFeriado(iso, motivo) {

@@ -923,3 +923,25 @@ header nav.tabs button.active { background: var(--accent-soft); }
 .modal { box-shadow: var(--sombra-md); }
 
 ::selection { background: var(--accent-soft); color: var(--text); }
+
+/* Desplegable dentro de una celda del cronograma ------------- */
+/* Ocupa el ancho de la celda para que la lista se abra alineada con ella,
+   y no arrastra el alto de la fila: sin esto la tabla salta al abrirlo. */
+select.celda-sel {
+  width: 100%;
+  max-width: 220px;
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 2px 6px;
+  margin: -3px 0;
+  color: var(--text);
+  font-size: 12px;
+  font-family: inherit;
+  box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.12);
+}
+select.celda-sel:focus { outline: none; }
+
+/* La celda editable se insinúa al pasar el mouse; el cursor ya era pointer. */
+table.grid td.cell:not(.ro) .pill { border: 1px solid transparent; }
+table.grid td.cell:not(.ro):hover .pill { border-color: rgba(29, 78, 216, 0.35); }

@@ -259,8 +259,11 @@ function htmlDias(mod, lunes, editable, hoy) {
       ? `<span class="pill ${mod.pillClass(c.tarde)}">${esc(nom(c.tarde))}</span>`
       : (esSabado ? '<span class="muted italic">solo mañana</span>' : '<span class="muted">—</span>');
 
-    const attrM = editable ? `data-accion="rotar" data-mod="${mod.id}" data-iso="${iso}" data-turno="manana"` : '';
-    const attrT = editable && !esSabado ? `data-accion="rotar" data-mod="${mod.id}" data-iso="${iso}" data-turno="tarde"` : '';
+    // El título explica el gesto: sin él, que la celda sea editable no se ve.
+    const editar = (turno) => `data-accion="editar-celda" data-mod="${mod.id}"
+      data-iso="${iso}" data-turno="${turno}" title="Clic para elegir vendedor"`;
+    const attrM = editable ? editar('manana') : '';
+    const attrT = editable && !esSabado ? editar('tarde') : '';
     const cls = editable ? 'cell' : 'cell ro';
 
     html += `<tr${trCls}>
