@@ -5,6 +5,7 @@ import { vigilarConexion } from './db.js';
 import {
   observarSesion, login, logout, getSession, esAdmin, traducirError,
   cambiarPassword, listarUsuarios, crearPadronFaltante, crearUsuario, listarVendedores,
+  faltantesDelPadron,
 } from './auth.js';
 import { MIN_PASS, passInicial, PADRON } from './config.js';
 import { esc, fromISO, formatShort, formatLargo, hoyISO } from './utils.js';
@@ -690,7 +691,7 @@ async function cargarUsuarios() {
   if (!cont) return;
   try {
     const usuarios = await listarUsuarios();
-    const faltantes = PADRON.filter((p) => !usuarios.some((u) => u.user === p.user));
+    const faltantes = faltantesDelPadron(usuarios);
 
     let html = '';
     if (faltantes.length > 0 && !DEMO) {
@@ -737,13 +738,23 @@ async function hacerCambioPassConfig() {
 }
 
 async function hacerCrearPadron(btn) {
-  if (!confirm('Se van a crear las cuentas faltantes con su contraseña inicial.\n\n¿Continuar?')) return;
+  // Se bloquea antes del confirm: si no, dos clics rápidos abren dos diálogos
+  // y el alta masiva corre dos veces.
+  if (btn.disabled) return;
   btn.disabled = true;
+  if (!confirm('Se van a crear las cuentas faltantes con su contraseña inicial.\n\n¿Continuar?')) {
+    btn.disabled = false;
+    return;
+  }
   try {
-    const { creados, omitidos, errores } = await crearPadronFaltante((user, estado) => {
+    const { creados, asociados, omitidos, errores } = await crearPadronFaltante((user, estado) => {
       btn.textContent = `${estado}: ${user}…`;
     });
     let resumen = `Usuarios creados: ${creados.length}\nYa existían: ${omitidos.length}`;
+    if (asociados.length) {
+      resumen += `\n\nCuentas que ya existían y se volvieron a asociar a su vendedor:\n`
+        + asociados.map((a) => `  ${a.user} → ${a.vendedor}`).join('\n');
+    }
     if (creados.length) {
       resumen += '\n\nContraseñas iniciales (cada uno debe cambiarla al entrar):\n'
         + creados.map((c) => `  ${c.user} → ${c.pass}`).join('\n');

@@ -49,6 +49,21 @@ export function esc(s) {
   ));
 }
 
+/**
+ * Forma canónica de un nombre de usuario, para poder compararlos.
+ *
+ * El padrón escribe `de_la_rosa` y la misma persona puede estar en Supabase
+ * como `delarosa`, `De La Rosa` o `delarosa@cronograma.com`. Comparar el texto
+ * crudo daba por faltantes a los quince que ya estaban dados de alta.
+ */
+export function normUser(v) {
+  return String(v ?? '')
+    .split('@')[0]
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')   // sin acentos
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');                          // sin _ , espacios ni guiones
+}
+
 /** Agrupa fechas ISO ordenadas en semanas que arrancan el lunes. */
 export function agruparPorSemanaDesde(fechas) {
   const semanas = [];
