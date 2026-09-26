@@ -515,7 +515,7 @@ hr { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
 .user-list { display: flex; flex-direction: column; gap: 6px; }
 .user-row {
   display: grid;
-  grid-template-columns: 1fr 60px 90px;
+  grid-template-columns: 1fr 60px 90px auto;
   gap: 8px;
   padding: 6px 8px;
   background: var(--bg);
@@ -945,3 +945,39 @@ select.celda-sel:focus { outline: none; }
 /* La celda editable se insinúa al pasar el mouse; el cursor ya era pointer. */
 table.grid td.cell:not(.ro) .pill { border: 1px solid transparent; }
 table.grid td.cell:not(.ro):hover .pill { border-color: rgba(29, 78, 216, 0.35); }
+
+/* Acciones por fila en Configuración › Usuarios --------------- */
+.user-acciones { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.user-acciones button.mini {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+}
+.user-acciones button.mini:hover { background: var(--card); }
+.user-acciones button.mini.principal { background: var(--accent); border-color: var(--accent); color: #fff; }
+.user-acciones button.mini.principal:hover { background: var(--accent-hover); }
+/* Eliminar se pinta distinto sólo al apuntarlo: en reposo compite con el
+   resto de los botones y se toca sin querer. */
+.user-acciones button.mini.peligro:hover { background: var(--err); border-color: var(--err); color: #fff; }
+
+/* Una cuenta dada de baja se sigue viendo, apagada. */
+.user-row.baja > div:first-child { opacity: 0.55; }
+.role-tag.inactiva { background: var(--card); color: var(--muted); border: 1px solid var(--border); }
+
+/* La fila en edición ocupa el ancho entero: dos desplegables no entran en la
+   columna del nombre. */
+.user-row.editando { grid-template-columns: 1fr; gap: 6px; }
+.user-row.editando select.txt { width: 100%; }
+
+@media (max-width: 600px) {
+  .user-row { grid-template-columns: 1fr auto; }
+  .user-row > div:nth-child(2), .user-row > div:nth-child(3) { display: none; }
+  .user-acciones { justify-content: flex-start; }
+}

@@ -5,7 +5,7 @@ import { vigilarConexion } from './db.js';
 import {
   observarSesion, login, logout, getSession, esAdmin, traducirError,
   cambiarPassword, listarUsuarios, crearPadronFaltante, crearUsuario, listarVendedores,
-  faltantesDelPadron,
+  faltantesDelPadron, actualizarPerfil, setActivo, resetearPass, eliminarUsuario,
 } from './auth.js';
 import { MIN_PASS, passInicial, PADRON } from './config.js';
 import { esc, fromISO, formatShort, formatLargo, hoyISO } from './utils.js';
@@ -700,21 +700,107 @@ async function cargarUsuarios() {
         <button class="btn-primary mb-8" data-accion="crear-padron">Crear los ${faltantes.length} usuarios faltantes</button>`;
     }
 
-    html += `<div class="user-list">${usuarios.map((u) => `
-      <div class="user-row">
-        <div>${esc(u.user)} ${u.vendedor ? `<span class="muted">(${esc(nom(u.vendedor))})</span>` : ''}
-          <span class="role-tag ${u.rol === 'admin' ? 'admin' : 'vend'}">${esc(u.rol)}</span></div>
-        <div class="muted small">${u.puntoVenta ? esc(u.puntoVenta.toUpperCase()) : '—'}</div>
-        <div class="small ${u.passCambiada ? 'ok-txt' : 'warn-txt'}">${u.passCambiada ? 'Propia' : 'Por defecto'}</div>
-      </div>`).join('')}</div>
-      <div class="muted small mt-8">Para <b>resetear la contraseña</b> de alguien o <b>dar de baja</b> una cuenta,
-      entrá al panel de Supabase → Authentication → Users. Por seguridad, esas acciones no se pueden hacer desde el navegador.</div>`;
+    const vendedores = await listarVendedores();
+    html += `<div class="user-list">${usuarios.map((u) => filaUsuario(u, vendedores)).join('')}</div>`;
 
     cont.className = '';
     cont.innerHTML = html;
   } catch (e) {
     cont.innerHTML = `<div class="warn-box">No se pudieron leer los usuarios: ${esc(traducirError(e))}</div>`;
   }
+}
+
+// Qué fila está abierta en modo edición. Una sola por vez: dos formularios
+// abiertos invitan a guardar el equivocado.
+let editandoUid = null;
+
+function filaUsuario(u, vendedores) {
+  const esYo = u.uid === getSession()?.uid;
+  const baja = u.activo === false;
+
+  if (editandoUid === u.uid) {
+    const opciones = vendedores.map((v) =>
+      `<option value="${v.id}"${v.nombre === u.vendedor ? ' selected' : ''}>${esc(nom(v.nombre))} (${esc(v.punto_venta.toUpperCase())})</option>`
+    ).join('');
+    return `<div class="user-row editando">
+      <b>${esc(u.user)}</b>
+      <select class="txt" id="ed-rol">
+        <option value="vendedor"${u.rol === 'vendedor' ? ' selected' : ''}>Solo lectura</option>
+        <option value="admin"${u.rol === 'admin' ? ' selected' : ''}>Administrador (puede editar)</option>
+      </select>
+      <select class="txt" id="ed-vend">
+        <option value="">Sin vendedor asociado</option>${opciones}
+      </select>
+      <div class="user-acciones">
+        <button class="mini principal" data-accion="usuario-guardar" data-uid="${u.uid}">Guardar</button>
+        <button class="mini" data-accion="usuario-cancelar">Cancelar</button>
+      </div>
+    </div>`;
+  }
+
+  return `<div class="user-row${baja ? ' baja' : ''}">
+    <div>${esc(u.user)} ${u.vendedor ? `<span class="muted">(${esc(nom(u.vendedor))})</span>` : ''}
+      <span class="role-tag ${u.rol === 'admin' ? 'admin' : 'vend'}">${esc(u.rol)}</span>
+      ${baja ? '<span class="role-tag inactiva">desactivada</span>' : ''}</div>
+    <div class="muted small">${u.puntoVenta ? esc(u.puntoVenta.toUpperCase()) : '—'}</div>
+    <div class="small ${u.passCambiada ? 'ok-txt' : 'warn-txt'}">${u.passCambiada ? 'Propia' : 'Por defecto'}</div>
+    <div class="user-acciones">
+      <button class="mini" data-accion="usuario-editar" data-uid="${u.uid}">Editar</button>
+      <button class="mini" data-accion="usuario-reset" data-uid="${u.uid}" data-user="${esc(u.user)}">Resetear</button>
+      ${esYo ? '<span class="muted small">tu cuenta</span>' : `
+        <button class="mini" data-accion="usuario-activo" data-uid="${u.uid}"
+                data-activo="${baja ? '1' : '0'}">${baja ? 'Activar' : 'Desactivar'}</button>
+        <button class="mini peligro" data-accion="usuario-eliminar" data-uid="${u.uid}"
+                data-user="${esc(u.user)}">Eliminar</button>`}
+    </div>
+  </div>`;
+}
+
+/** Corre una operación, avisa cómo salió y vuelve a dibujar la lista. */
+async function conAviso(fn, exito) {
+  try {
+    const r = await fn();
+    if (exito) alert(typeof exito === 'function' ? exito(r) : exito);
+  } catch (e) {
+    alert(traducirError(e));
+  }
+  editandoUid = null;
+  cargarUsuarios();
+}
+
+function hacerGuardarUsuario(uid) {
+  const rol = $('ed-rol').value;
+  // El desplegable devuelve texto y vendedor_id es un entero. Postgres lo
+  // coerciona, pero guardar "1" donde va 1 rompe cualquier comparación
+  // estricta contra el padrón de vendedores.
+  const elegido = $('ed-vend').value;
+  conAviso(() => actualizarPerfil(uid, { rol, vendedorId: elegido ? Number(elegido) : null }));
+}
+
+function hacerActivarUsuario(uid, activar) {
+  const aviso = activar
+    ? '¿Reactivar esta cuenta? Va a poder volver a entrar.'
+    : '¿Desactivar esta cuenta?\n\nNo se borra nada: la persona deja de poder entrar '
+      + 'y sus turnos quedan como están.';
+  if (!confirm(aviso)) return;
+  conAviso(() => setActivo(uid, activar));
+}
+
+function hacerResetearUsuario(uid, user) {
+  if (!confirm(`Se le va a generar una contraseña temporal a "${user}", `
+    + 'y la app le va a pedir que la cambie al entrar.\n\n¿Continuar?')) return;
+  conAviso(() => resetearPass(uid),
+    (pass) => `Contraseña temporal de ${user}:\n\n    ${pass}\n\n`
+      + 'Pasásela por un medio seguro. La tiene que cambiar en el primer ingreso.');
+}
+
+function hacerEliminarUsuario(uid, user) {
+  // Escribir el nombre es la traba: un confirm suelto se acepta de memoria.
+  const escrito = prompt(`Esto elimina la cuenta "${user}" y no se puede deshacer.\n\n`
+    + 'Escribí el nombre de usuario para confirmar:');
+  if (escrito === null) return;
+  if (escrito.trim() !== user) { alert('El nombre no coincide. No se eliminó nada.'); return; }
+  conAviso(() => eliminarUsuario(uid), `Cuenta "${user}" eliminada.`);
 }
 
 async function hacerCambioPassConfig() {
@@ -807,6 +893,12 @@ document.addEventListener('click', (ev) => {
     case 'pedido-aprobar': resolverPedido(el.dataset.id, true); break;
     case 'pedido-rechazar': resolverPedido(el.dataset.id, false); break;
     case 'pedido-cancelar': hacerCancelarPedido(el.dataset.id); break;
+    case 'usuario-editar': editandoUid = el.dataset.uid; cargarUsuarios(); break;
+    case 'usuario-cancelar': editandoUid = null; cargarUsuarios(); break;
+    case 'usuario-guardar': hacerGuardarUsuario(el.dataset.uid); break;
+    case 'usuario-activo': hacerActivarUsuario(el.dataset.uid, el.dataset.activo === '1'); break;
+    case 'usuario-reset': hacerResetearUsuario(el.dataset.uid, el.dataset.user); break;
+    case 'usuario-eliminar': hacerEliminarUsuario(el.dataset.uid, el.dataset.user); break;
     case 'pass-gate-submit': hacerCambioObligatorio(); break;
     case 'pass-gate-salir': logout(); break;
 
