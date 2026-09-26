@@ -19,6 +19,14 @@ supabase functions deploy admin-usuarios
 No hace falta configurar ningún secreto: `SUPABASE_URL`, `SUPABASE_ANON_KEY` y
 `SUPABASE_SERVICE_ROLE_KEY` se las inyecta Supabase a toda Edge Function.
 
+**Dejar "Verify JWT with legacy secret" en OFF** (panel → Edge Functions →
+admin-usuarios → Settings). Ese control exige un JWT firmado con el secreto
+legacy, y este proyecto usa el formato nuevo de claves (`sb_publishable_...`):
+con el control encendido, un token de sesión válido puede ser rechazado en la
+puerta de entrada y la app recibe un 401 confuso. La autorización real la hace
+la función, que verifica que quien llama sea un admin activo antes de tocar
+nada.
+
 Antes de desplegar, correr la migración `20260926_gestion_usuarios.sql`: la
 función lee `perfiles.activo` para verificar que quien llama sea un admin
 activo.
