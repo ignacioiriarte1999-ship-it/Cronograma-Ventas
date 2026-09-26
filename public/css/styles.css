@@ -945,3 +945,6 @@ select.celda-sel:focus { outline: none; }
 /* La celda editable se insinúa al pasar el mouse; el cursor ya era pointer. */
 table.grid td.cell:not(.ro) .pill { border: 1px solid transparent; }
 table.grid td.cell:not(.ro):hover .pill { border-color: rgba(29, 78, 216, 0.35); }
+
+/* Carga automática de feriados ------------------------------- */
+.feriado-auto { display: grid; grid-template-columns: 1fr auto; gap: 6px; }

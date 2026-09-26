@@ -3,6 +3,7 @@
 // ============================================================
 import { getSession, esAdmin } from './auth.js';
 import { nom, local, texto } from './alias.js';
+import { aniosOfrecidos } from './feriados-api.js';
 import { getModulo, listaModulos } from './modules.js';
 import { INICIO_SEMESTRE, FIN_SEMESTRE } from './config.js';
 import {
@@ -112,6 +113,16 @@ function htmlSidebar(mod, totales, editable, clave) {
       <input type="text" class="txt" id="fer-nombre-${mod.id}" placeholder="Motivo" maxlength="120" />
       <button class="btn-secondary" data-accion="agregar-feriado" data-mod="${mod.id}">+</button>
     </div>
+    <div class="feriado-auto mt-8">
+      <select class="txt" id="fer-anio-${mod.id}">
+        ${aniosOfrecidos(mod).map((a) => `<option value="${a}">${a}</option>`).join('')}
+      </select>
+      <button class="btn-secondary" data-accion="feriados-cargar" data-mod="${mod.id}">Cargar feriados</button>
+    </div>
+    <button class="btn-secondary full mt-8" data-accion="feriados-actualizar" data-mod="${mod.id}">
+      Actualizar feriados</button>
+    <div class="muted small mt-4">Los trasladables y los puentes turísticos se deciden por
+      decreto durante el año: conviene actualizar cada tanto.</div>
   </div>`;
 
   html += `<div class="panel">
