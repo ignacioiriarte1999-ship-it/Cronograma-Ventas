@@ -7,6 +7,7 @@
 
 import { sb, clienteAislado, traducirDb } from './db.js';
 import { userToEmail, emailToUser, MIN_PASS, PADRON, passInicial } from './config.js';
+import { normUser } from './utils.js';
 
 /** Sesión activa: { uid, user, rol, vendedor, puntoVenta, passCambiada } */
 let sesion = null;
@@ -200,19 +201,59 @@ export async function crearUsuario({ user, rol, vendedorId = null, passCambiada 
 }
 
 /**
- * Alta masiva del padrón. Saltea los que ya existen, así que se puede volver
- * a correr para incorporar a alguien que faltaba.
+ * Los del padrón que todavía no están representados por ninguna cuenta.
+ *
+ * El criterio es el vendedor asociado, no el nombre de usuario: lo que importa
+ * es que alguien del padrón tenga quien lo represente. Comparar `u.user` con
+ * `p.user` daba por faltantes a los quince que ya existían, porque el padrón
+ * escribe `de_la_rosa` y la cuenta puede ser `delarosa` o un mail entero.
+ *
+ * Una cuenta que existe pero perdió su vendedor sí cuenta como faltante, y se
+ * resuelve reasociándola —ver `crearPadronFaltante`—, no creando otra.
+ *
+ * Es la única definición de "falta": la usan el aviso de Configuración y el
+ * alta masiva, para que no puedan contradecirse.
+ */
+export function faltantesDelPadron(usuarios) {
+  return PADRON.filter((p) => !usuarios.some((u) => (p.vendedor
+    ? u.vendedor === p.vendedor && u.puntoVenta === p.puntoVenta
+    : normUser(u.user) === normUser(p.user))));
+}
+
+/** La cuenta que le corresponde a alguien del padrón, si ya existe. */
+export const cuentaDelPadron = (usuarios, p) =>
+  usuarios.find((u) => normUser(u.user) === normUser(p.user)) || null;
+
+/**
+ * Pone al día el padrón. Saltea a los que ya están, crea la cuenta del que no
+ * la tiene y reasocia la que existe pero quedó sin vendedor, así que se puede
+ * volver a correr sin duplicar a nadie.
  */
 export async function crearPadronFaltante(onProgreso = () => {}) {
-  const existentes = new Set((await listarUsuarios()).map((u) => u.user));
+  const usuarios = await listarUsuarios();
+  const pendientes = new Set(faltantesDelPadron(usuarios).map((p) => p.user));
   const creados = [];
+  const asociados = [];
   const omitidos = [];
   const errores = [];
 
   for (const p of PADRON) {
-    if (existentes.has(p.user)) { omitidos.push(p.user); onProgreso(p.user, 'omitido'); continue; }
+    if (!pendientes.has(p.user)) { omitidos.push(p.user); onProgreso(p.user, 'omitido'); continue; }
     try {
       const vendedorId = await buscarVendedorId(p.puntoVenta, p.vendedor);
+      const cuenta = cuentaDelPadron(usuarios, p);
+
+      if (cuenta) {
+        // La cuenta está; lo que falta es el vínculo con el vendedor. Crear
+        // otra sólo daría "User already registered" y dejaría el problema.
+        const { error } = await sb
+          .from('perfiles').update({ vendedor_id: vendedorId }).eq('id', cuenta.uid);
+        if (error) throw error;
+        asociados.push({ user: cuenta.user, vendedor: p.vendedor });
+        onProgreso(p.user, 'asociado');
+        continue;
+      }
+
       await crearUsuario({ user: p.user, rol: p.rol, vendedorId }, passInicial(p.user));
       creados.push({ user: p.user, pass: passInicial(p.user) });
       onProgreso(p.user, 'creado');
@@ -221,5 +262,5 @@ export async function crearPadronFaltante(onProgreso = () => {}) {
       onProgreso(p.user, 'error');
     }
   }
-  return { creados, omitidos, errores };
+  return { creados, asociados, omitidos, errores };
 }
