@@ -12,7 +12,9 @@ import { esc, fromISO, formatShort, formatLargo, hoyISO } from './utils.js';
 import { nom, local, texto } from './alias.js';
 import { DEMO } from './db.js';
 import { getModulo, listaModulos } from './modules.js';
-import { HORIZONTE_MINIMO_DIAS, objetivoDeCobertura, diasRestantes, bajaVendedor } from './schedule.js';
+import {
+  HORIZONTE_MINIMO_DIAS, objetivoDeCobertura, diasRestantes, bajaVendedor, renombrarVendedor,
+} from './schedule.js';
 import {
   TIPOS, crearAusencia, borrarAusencia, proponerReemplazos, mostrarReemplazos,
   aplicarReemplazo, rechazarReemplazo, aplicarTodosLosReemplazos, rechazarTodosLosReemplazos,
@@ -737,13 +739,17 @@ function cargarVendedores() {
       const meta = mod.metaDe(v);
       const id = mod.idDe(v);
       const baja = meta?.baja_desde || null;
+      const renombrado = meta?.nombre_visible || null;
       return `<div class="vend-row${baja ? ' baja' : ''}">
         <div><span class="pill ${mod.pillClass(v)}">${esc(nom(v))}</span>
+          ${renombrado ? `<span class="muted small">antes ${esc(v)}</span>` : ''}
           ${baja ? `<span class="muted small">baja desde ${esc(baja)}</span>` : ''}</div>
         <div class="user-acciones">
-          ${id === null ? '<span class="muted small">sin fila en la base</span>' : (baja
-            ? `<button class="mini" data-accion="vend-reactivar" data-id="${id}" data-v="${esc(v)}">Reactivar</button>`
-            : `<button class="mini" data-accion="vend-baja" data-id="${id}" data-v="${esc(v)}">Dar de baja</button>`)}
+          ${id === null ? '<span class="muted small">sin fila en la base</span>' : `
+            <button class="mini" data-accion="vend-renombrar" data-id="${id}" data-v="${esc(v)}">Renombrar</button>
+            ${baja
+              ? `<button class="mini" data-accion="vend-reactivar" data-id="${id}" data-v="${esc(v)}">Reactivar</button>`
+              : `<button class="mini" data-accion="vend-baja" data-id="${id}" data-v="${esc(v)}">Dar de baja</button>`}`}
         </div>
       </div>`;
     }).join('');
@@ -817,6 +823,24 @@ async function hacerBorrarAusencia(mod, id) {
     await mod.cargarAusencias();
   } catch (e) { alert(traducirError(e)); }
   cargarVendedores();
+}
+
+async function hacerRenombrarVendedor(id, vendedor) {
+  const actual = nom(vendedor);
+  const nuevo = prompt('¿Con qué nombre se muestra esta persona?\n\n'
+    + 'Cambia sólo lo que se ve: el cronograma, las estadísticas y los avisos. '
+    + 'Dejalo vacío para volver al original.', actual);
+  if (nuevo === null) return;
+
+  const limpio = nuevo.trim();
+  try {
+    // Volver al original es borrar el renombre, no guardar el nombre viejo:
+    // así la fila deja de figurar como renombrada.
+    await renombrarVendedor(Number(id), limpio && limpio !== vendedor ? limpio : null);
+    for (const m of listaModulos()) await m.cargar();
+  } catch (e) { alert(traducirError(e)); }
+  cargarVendedores();
+  for (const m of listaModulos()) renderCronograma(m);
 }
 
 async function hacerBajaVendedor(id, vendedor, dar) {
@@ -1025,6 +1049,7 @@ document.addEventListener('click', (ev) => {
     case 'usuario-eliminar': hacerEliminarUsuario(el.dataset.uid, el.dataset.user); break;
     case 'ausencia-crear': if (mod) hacerCrearAusencia(mod); break;
     case 'ausencia-borrar': if (mod) hacerBorrarAusencia(mod, el.dataset.id); break;
+    case 'vend-renombrar': hacerRenombrarVendedor(el.dataset.id, el.dataset.v); break;
     case 'vend-baja': hacerBajaVendedor(el.dataset.id, el.dataset.v, true); break;
     case 'vend-reactivar': hacerBajaVendedor(el.dataset.id, el.dataset.v, false); break;
     case 'reemplazo-aplicar': aplicarReemplazo(el.dataset.i); break;

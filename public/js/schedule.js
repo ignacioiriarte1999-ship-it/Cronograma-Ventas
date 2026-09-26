@@ -10,6 +10,7 @@ import { sb, traducirDb } from './db.js';
 import { esAdmin, getSession } from './auth.js';
 import { esqueletoSemestre, rangoDeFechas, domingoDe, feriadosDelRango } from './periodo.js';
 import { toISO, fromISO, addDays, hoyISO, DIAS_LARGOS } from './utils.js';
+import { definirVisibles } from './alias.js';
 
 const avisarError = (contexto, error) => {
   console.error(contexto, error);
@@ -31,6 +32,32 @@ export function diasRestantes(hastaISO) {
   if (!hastaISO) return 0;
   const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
   return Math.round((fromISO(hastaISO) - hoy) / 86400000);
+}
+
+/**
+ * Renombres cargados, juntando los dos puntos de venta.
+ *
+ * El diccionario de alias es uno solo para toda la app, así que cada módulo
+ * no puede publicar el suyo por separado: se rearma entero cada vez.
+ */
+const visiblesPorModulo = new Map();
+
+function publicarVisibles() {
+  const todo = {};
+  for (const parcial of visiblesPorModulo.values()) Object.assign(todo, parcial);
+  definirVisibles(todo);
+}
+
+/**
+ * Cambia el nombre que se muestra. Con `visible = null` vuelve al original.
+ *
+ * No toca `vendedores.nombre`: ese es el identificador con el que están
+ * escritas las reglas de ContacCenter, y cambiarlo rompería la generación.
+ */
+export async function renombrarVendedor(id, visible) {
+  const { error } = await sb.from('vendedores')
+    .update({ nombre_visible: visible || null }).eq('id', id);
+  if (error) throw new Error(traducirDb(error));
 }
 
 /**
@@ -78,7 +105,8 @@ export function crearModulo(config) {
     async cargar() {
       const pv = this.id;
       const [vend, turnos, feriados, hist, revs] = await Promise.all([
-        sb.from('vendedores').select('id, nombre, orden, activo, baja_desde').eq('punto_venta', pv).order('orden'),
+        sb.from('vendedores').select('id, nombre, orden, activo, baja_desde, nombre_visible')
+          .eq('punto_venta', pv).order('orden'),
         sb.from('turnos').select('fecha, turno, vendedor_id').eq('punto_venta', pv),
         sb.from('feriados').select('fecha, motivo').eq('punto_venta', pv),
         sb.from('historial').select('*').eq('punto_venta', pv).order('ts', { ascending: false }).limit(100),
@@ -100,6 +128,10 @@ export function crearModulo(config) {
         this._nombrePorId.set(v.id, v.nombre);
         this._metaPorNombre.set(v.nombre, v);
       }
+
+      visiblesPorModulo.set(pv, Object.fromEntries(
+        vend.data.filter((v) => v.nombre_visible).map((v) => [v.nombre, v.nombre_visible])));
+      publicarVisibles();
 
       const faltantes = config.vendedores.filter((n) => !this._idPorNombre.has(n));
       if (faltantes.length) {

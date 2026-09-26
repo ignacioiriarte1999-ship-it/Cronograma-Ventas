@@ -51,3 +51,13 @@ begin
   alter publication supabase_realtime add table ausencias;
 exception when duplicate_object then null;
 end $$;
+
+-- ------------------------------------------------------------
+--  NOMBRE PARA MOSTRAR
+-- ------------------------------------------------------------
+-- Renombrar cambia sólo lo que se ve. `nombre` sigue siendo el identificador
+-- con el que están escritas las reglas —reglas-cc.js pone 'Imbaud' literal
+-- dentro de generarSemana— así que cambiarlo de verdad rompería la
+-- generación de ContacCenter. Con `null` se vuelve al original.
+
+alter table vendedores add column if not exists nombre_visible text;
