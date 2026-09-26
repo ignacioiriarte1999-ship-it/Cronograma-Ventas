@@ -659,8 +659,36 @@ select.txt option { background: var(--surface); }
 /* Selector de período ---------------------------------------- */
 .periodo-sel { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
 .periodo-sel select { width: auto; min-width: 180px; }
-.periodo-fila { display: flex; align-items: center; gap: 8px; }
+.periodo-fila { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .periodo-fila button { white-space: nowrap; }
+.periodo-fila button[disabled] { opacity: 0.45; cursor: default; }
+
+/* Conmutador Semestre / Semana. Dos botones pegados leen como un solo
+   control: cuál está activo se ve sin tener que compararlos. */
+.vista-sw { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.vista-sw button {
+  background: var(--surface);
+  color: var(--muted);
+  border: 0;
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color .15s ease, color .15s ease;
+}
+.vista-sw button + button { border-left: 1px solid var(--border); }
+.vista-sw button:hover:not(.on) { background: var(--card); }
+.vista-sw button.on { background: var(--accent); color: #fff; }
+
+/* En celular la cabecera ocupa el ancho completo: con el conmutador más las
+   flechas, alineada a la derecha se partía en dos renglones desparejos.
+   Va después de las reglas de arriba porque las pisa por orden. */
+@media (max-width: 600px) {
+  .cron-title { flex-direction: column; align-items: stretch; }
+  .periodo-sel { align-items: stretch; }
+  .periodo-fila { justify-content: flex-start; }
+  .periodo-fila select { flex: 1; min-width: 0; }
+}
 
 /* Selector de vendedor en "Mi horario" ----------------------- */
 .mio-selector { margin-bottom: 16px; }

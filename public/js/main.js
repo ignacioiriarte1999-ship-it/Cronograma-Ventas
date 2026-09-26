@@ -14,6 +14,7 @@ import { getModulo, listaModulos } from './modules.js';
 import { HORIZONTE_MINIMO_DIAS, objetivoDeCobertura, diasRestantes } from './schedule.js';
 import {
   renderCronograma, renderMiHorario, elegirPeriodo, elegirVendedor, setPedidosPropios, irAHoy,
+  elegirVista, moverSemana,
 } from './render.js';
 import {
   listarPedidos, contarPendientes, suscribirPedidos, crearPedido, cancelarPedido,
@@ -803,6 +804,11 @@ document.addEventListener('click', (ev) => {
 
     case 'editar-celda': if (mod) abrirSelectorCelda(el, mod, iso, turno); break;
     case 'ir-a-hoy': if (mod) irAHoy(mod); break;
+    case 'vista':
+      if (mod) { elegirVista(mod.id, el.dataset.vista); renderCronograma(mod); }
+      break;
+    case 'semana-prev': if (mod) moverSemana(mod, -1); break;
+    case 'semana-next': if (mod) moverSemana(mod, 1); break;
     case 'agregar-feriado': agregarFeriado(mod); break;
     case 'quitar-feriado':
       if (confirm(`¿Quitar el feriado del ${formatShort(fromISO(iso))}?`)) mod.quitarFeriado(iso);
