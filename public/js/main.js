@@ -12,7 +12,9 @@ import { nom, local } from './alias.js';
 import { DEMO } from './db.js';
 import { getModulo, listaModulos } from './modules.js';
 import { HORIZONTE_MINIMO_DIAS, objetivoDeCobertura, diasRestantes } from './schedule.js';
-import { renderCronograma, renderMiHorario, elegirPeriodo, elegirVendedor, setPedidosPropios } from './render.js';
+import {
+  renderCronograma, renderMiHorario, elegirPeriodo, elegirVendedor, setPedidosPropios, irAHoy,
+} from './render.js';
 import {
   listarPedidos, contarPendientes, suscribirPedidos, crearPedido, cancelarPedido,
   aprobarPedido, rechazarPedido, revisarImpacto, describirTurno, estaInstalado,
@@ -800,6 +802,7 @@ document.addEventListener('click', (ev) => {
     case 'pass-gate-salir': logout(); break;
 
     case 'editar-celda': if (mod) abrirSelectorCelda(el, mod, iso, turno); break;
+    case 'ir-a-hoy': if (mod) irAHoy(mod); break;
     case 'agregar-feriado': agregarFeriado(mod); break;
     case 'quitar-feriado':
       if (confirm(`¿Quitar el feriado del ${formatShort(fromISO(iso))}?`)) mod.quitarFeriado(iso);

@@ -147,6 +147,33 @@ function htmlSidebar(mod, totales, editable, clave) {
 }
 
 /** Quién abre: la mañana del primer día laborable de la semana. */
+/**
+ * Lleva la vista a la semana de hoy y la deja a la vista.
+ *
+ * Hoy puede caer en otro semestre que el que se está mirando, así que primero
+ * cambia el período —y vuelve a dibujar, porque el ancla todavía no existe en
+ * el DOM— y recién después hace scroll.
+ *
+ * Devuelve false si hoy queda fuera del cronograma cargado.
+ */
+export function irAHoy(mod) {
+  const hoy = hoyISO();
+  const semanas = agruparPorSemanaDesde(Object.keys(mod.cronograma).sort());
+  const sem = semanas.find((s) => hoy >= s.lunes && hoy <= toISO(addDays(fromISO(s.lunes), 6)));
+  if (!sem) return false;
+
+  const clave = claveDe(sem.lunes);
+  if (periodoElegido[mod.id] !== clave) {
+    periodoElegido[mod.id] = clave;
+    renderCronograma(mod);
+  }
+
+  const destino = document.getElementById(`sem-${mod.id}-${sem.lunes}`);
+  if (!destino) return false;
+  destino.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  return true;
+}
+
 function primerTurnoDe(mod, sem) {
   for (const iso of sem.dias) {
     const c = mod.cronograma[iso];
@@ -166,7 +193,10 @@ function htmlSemanas(mod, semanas, editable, periodos, clave, totalSemanas) {
       <div class="sub">${esc(texto(mod.subtitulo))}</div>
     </div>
     <div class="periodo-sel">
-      ${periodos.length > 1 ? `<select class="txt" data-accion="periodo" data-mod="${mod.id}">${opciones}</select>` : ''}
+      <div class="periodo-fila">
+        ${periodos.length > 1 ? `<select class="txt" data-accion="periodo" data-mod="${mod.id}">${opciones}</select>` : ''}
+        ${mod.cronograma[hoy] ? `<button class="btn-secondary" data-accion="ir-a-hoy" data-mod="${mod.id}">Ir a hoy</button>` : ''}
+      </div>
       <div class="muted small">${semanas.length} de ${totalSemanas} semanas · ${mod.desde || INICIO_SEMESTRE} → ${mod.hasta || FIN_SEMESTRE}</div>
     </div>
   </div>`;
