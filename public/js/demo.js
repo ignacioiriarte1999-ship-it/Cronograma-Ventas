@@ -60,8 +60,9 @@ export const USUARIOS_DEMO = [
 const T = {
   puntos_venta: [], vendedores: [], perfiles: [],
   turnos: [], feriados: [], historial: [], revisiones: [], intercambios: [],
+  ausencias: [],
 };
-let secuencias = { vendedores: 0, historial: 0, intercambios: 0 };
+let secuencias = { vendedores: 0, historial: 0, intercambios: 0, ausencias: 0 };
 const proximo = (t) => ++secuencias[t];
 
 const DESDE = '2026-07-06';

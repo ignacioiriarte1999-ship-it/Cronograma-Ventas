@@ -981,3 +981,23 @@ table.grid td.cell:not(.ro):hover .pill { border-color: rgba(29, 78, 216, 0.35);
   .user-row > div:nth-child(2), .user-row > div:nth-child(3) { display: none; }
   .user-acciones { justify-content: flex-start; }
 }
+
+/* Vendedores y ausencias ------------------------------------- */
+.vend-bloque { margin-bottom: 14px; }
+.vend-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 5px 8px;
+  background: var(--bg);
+  border-radius: 4px;
+  font-size: 11px;
+  margin-bottom: 4px;
+}
+.vend-row.baja > div:first-child { opacity: 0.55; }
+.vend-row .muted.small { margin-left: 6px; }
+.ausencia-form { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+@media (max-width: 520px) {
+  .ausencia-form { grid-template-columns: 1fr; }
+}

@@ -9,10 +9,14 @@ import {
 } from './auth.js';
 import { MIN_PASS, passInicial, PADRON } from './config.js';
 import { esc, fromISO, formatShort, formatLargo, hoyISO } from './utils.js';
-import { nom, local } from './alias.js';
+import { nom, local, texto } from './alias.js';
 import { DEMO } from './db.js';
 import { getModulo, listaModulos } from './modules.js';
-import { HORIZONTE_MINIMO_DIAS, objetivoDeCobertura, diasRestantes } from './schedule.js';
+import { HORIZONTE_MINIMO_DIAS, objetivoDeCobertura, diasRestantes, bajaVendedor } from './schedule.js';
+import {
+  TIPOS, crearAusencia, borrarAusencia, proponerReemplazos, mostrarReemplazos,
+  aplicarReemplazo, rechazarReemplazo, aplicarTodosLosReemplazos, rechazarTodosLosReemplazos,
+} from './ausencias.js';
 import { renderCronograma, renderMiHorario, elegirPeriodo, elegirVendedor, setPedidosPropios } from './render.js';
 import {
   listarPedidos, contarPendientes, suscribirPedidos, crearPedido, cancelarPedido,
@@ -458,9 +462,18 @@ function abrirSelectorCelda(td, mod, iso, turno) {
   celdaEnEdicion?.cerrar();                // sólo uno a la vez
 
   const actual = mod.cronograma[iso]?.[turno] || '';
+  // Quien está de vacaciones o dado de baja no se ofrece. El que ya estaba
+  // asignado sí aparece aunque no esté disponible: si no, la celda mostraría
+  // un nombre que el desplegable niega, y no habría cómo sacarlo salvo
+  // eligiendo a otro.
+  const ofrecidos = mod.vendedores.filter((v) => v === actual || mod.disponible(v, iso));
   const opciones = ['<option value="">— sin asignar —</option>'].concat(
-    mod.vendedores.map((v) => `<option value="${esc(v)}"${v === actual ? ' selected' : ''}>`
-      + `${esc(nom(v))}</option>`),
+    ofrecidos.map((v) => {
+      const a = !mod.disponible(v, iso) ? mod.ausenciaDe(v, iso) : null;
+      const marca = a ? ` — ${a.tipo}` : '';
+      return `<option value="${esc(v)}"${v === actual ? ' selected' : ''}>`
+        + `${esc(nom(v))}${esc(marca)}</option>`;
+    }),
   ).join('');
 
   const previo = td.innerHTML;
@@ -620,6 +633,9 @@ function abrirConfig() {
       <div class="muted small mt-4">Continúa la rotación vigente sin tocar lo ya cargado.
       La app lo hace sola cuando quedan menos de ${HORIZONTE_MINIMO_DIAS} días.</div>
 
+      <hr><div class="stat-heading">Vendedores y ausencias</div>
+      <div id="cfg-vendedores" class="muted small">Cargando…</div>
+
       <hr><div class="stat-heading">Usuarios</div>
       <div id="cfg-usuarios" class="muted small">Cargando…</div>`;
   }
@@ -628,6 +644,7 @@ function abrirConfig() {
   $('modal-config').classList.add('open');
   if (esAdmin()) {
     cargarUsuarios();
+    cargarVendedores();
     cargarDesplegableVendedores();
   }
 }
@@ -708,6 +725,113 @@ async function cargarUsuarios() {
   } catch (e) {
     cont.innerHTML = `<div class="warn-box">No se pudieron leer los usuarios: ${esc(traducirError(e))}</div>`;
   }
+}
+
+function cargarVendedores() {
+  const cont = $('cfg-vendedores');
+  if (!cont) return;
+
+  cont.className = '';
+  cont.innerHTML = listaModulos().map((mod) => {
+    const filas = mod.vendedores.map((v) => {
+      const meta = mod.metaDe(v);
+      const id = mod.idDe(v);
+      const baja = meta?.baja_desde || null;
+      return `<div class="vend-row${baja ? ' baja' : ''}">
+        <div><span class="pill ${mod.pillClass(v)}">${esc(nom(v))}</span>
+          ${baja ? `<span class="muted small">baja desde ${esc(baja)}</span>` : ''}</div>
+        <div class="user-acciones">
+          ${id === null ? '<span class="muted small">sin fila en la base</span>' : (baja
+            ? `<button class="mini" data-accion="vend-reactivar" data-id="${id}" data-v="${esc(v)}">Reactivar</button>`
+            : `<button class="mini" data-accion="vend-baja" data-id="${id}" data-v="${esc(v)}">Dar de baja</button>`)}
+        </div>
+      </div>`;
+    }).join('');
+
+    const ausencias = mod.ausencias.length
+      ? mod.ausencias.map((a) => `<div class="vend-row">
+          <div><span class="pill ${mod.pillClass(a.vendedor)}">${esc(nom(a.vendedor))}</span>
+            <span class="muted small">${esc(a.tipo)} · ${esc(a.desde)} → ${esc(a.hasta)}</span>
+            ${a.nota ? `<span class="muted small">${esc(texto(a.nota))}</span>` : ''}</div>
+          <div class="user-acciones">
+            <button class="mini peligro" data-accion="ausencia-borrar" data-id="${a.id}"
+                    data-mod="${mod.id}">Quitar</button>
+          </div>
+        </div>`).join('')
+      : '<div class="muted small">Sin ausencias cargadas</div>';
+
+    const opcionesVend = mod.vendedores
+      .map((v) => `<option value="${esc(v)}">${esc(nom(v))}</option>`).join('');
+    const opcionesTipo = TIPOS
+      .map((t) => `<option value="${t}">${t}</option>`).join('');
+
+    return `<div class="vend-bloque">
+      <div class="stat-heading">${esc(local(mod.id, mod.nombre))}</div>
+      ${filas}
+      <div class="muted small mt-8">Ausencias</div>
+      ${ausencias}
+      <div class="ausencia-form mt-8">
+        <select class="txt" id="au-vend-${mod.id}">${opcionesVend}</select>
+        <select class="txt" id="au-tipo-${mod.id}">${opcionesTipo}</select>
+        <input type="date" class="txt" id="au-desde-${mod.id}" />
+        <input type="date" class="txt" id="au-hasta-${mod.id}" />
+      </div>
+      <button class="btn-secondary mt-8" data-accion="ausencia-crear" data-mod="${mod.id}">
+        Cargar ausencia</button>
+    </div>`;
+  }).join('');
+}
+
+async function hacerCrearAusencia(mod) {
+  const vendedor = $(`au-vend-${mod.id}`).value;
+  const tipo = $(`au-tipo-${mod.id}`).value;
+  const desde = $(`au-desde-${mod.id}`).value;
+  const hasta = $(`au-hasta-${mod.id}`).value;
+
+  if (!desde || !hasta) { alert('Faltan las fechas.'); return; }
+  if (hasta < desde) { alert('La fecha de fin es anterior a la de inicio.'); return; }
+
+  try {
+    await crearAusencia({ vendedorId: mod.idDe(vendedor), tipo, desde, hasta });
+    await mod.cargarAusencias();
+  } catch (e) {
+    alert(traducirError(e));
+    return;
+  }
+  cargarVendedores();
+
+  // La ausencia queda cargada, pero el cronograma no se toca solo: se le
+  // muestran al admin los turnos que quedan descubiertos y él decide.
+  //
+  // Configuración se cierra primero: los dos modales comparten capa y el de
+  // reemplazos quedaba detrás, invisible.
+  $('modal-config').classList.remove('open');
+  const ausencia = { vendedor, desde, hasta, tipo };
+  mostrarReemplazos(mod, ausencia, proponerReemplazos(mod, ausencia));
+}
+
+async function hacerBorrarAusencia(mod, id) {
+  if (!confirm('¿Quitar esta ausencia?\n\nLos turnos ya reemplazados quedan como están.')) return;
+  try {
+    await borrarAusencia(Number(id));
+    await mod.cargarAusencias();
+  } catch (e) { alert(traducirError(e)); }
+  cargarVendedores();
+}
+
+async function hacerBajaVendedor(id, vendedor, dar) {
+  let desde = null;
+  if (dar) {
+    desde = prompt(`¿Desde qué fecha sale ${vendedor} de la rotación?\n\n`
+      + 'Formato AAAA-MM-DD. Lo ya cargado antes de esa fecha no se toca.', hoyISO());
+    if (!desde) return;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(desde)) { alert('Fecha inválida. Usá AAAA-MM-DD.'); return; }
+  }
+  try {
+    await bajaVendedor(Number(id), desde);
+    for (const m of listaModulos()) await m.cargar();
+  } catch (e) { alert(traducirError(e)); }
+  cargarVendedores();
 }
 
 // Qué fila está abierta en modo edición. Una sola por vez: dos formularios
@@ -899,6 +1023,14 @@ document.addEventListener('click', (ev) => {
     case 'usuario-activo': hacerActivarUsuario(el.dataset.uid, el.dataset.activo === '1'); break;
     case 'usuario-reset': hacerResetearUsuario(el.dataset.uid, el.dataset.user); break;
     case 'usuario-eliminar': hacerEliminarUsuario(el.dataset.uid, el.dataset.user); break;
+    case 'ausencia-crear': if (mod) hacerCrearAusencia(mod); break;
+    case 'ausencia-borrar': if (mod) hacerBorrarAusencia(mod, el.dataset.id); break;
+    case 'vend-baja': hacerBajaVendedor(el.dataset.id, el.dataset.v, true); break;
+    case 'vend-reactivar': hacerBajaVendedor(el.dataset.id, el.dataset.v, false); break;
+    case 'reemplazo-aplicar': aplicarReemplazo(el.dataset.i); break;
+    case 'reemplazo-rechazar': rechazarReemplazo(el.dataset.i); break;
+    case 'reemplazo-aplicar-todos': aplicarTodosLosReemplazos(); break;
+    case 'reemplazo-rechazar-todos': rechazarTodosLosReemplazos(); break;
     case 'pass-gate-submit': hacerCambioObligatorio(); break;
     case 'pass-gate-salir': logout(); break;
 
