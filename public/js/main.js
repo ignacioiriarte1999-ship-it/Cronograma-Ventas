@@ -3,16 +3,27 @@
 // ============================================================
 import { vigilarConexion } from './db.js';
 import {
-  observarSesion, login, logout, getSession, esAdmin, traducirError,
+  observarSesion, login, logout, getSession, esAdmin, esSuperadmin, traducirError,
   cambiarPassword, listarUsuarios, crearPadronFaltante, crearUsuario, listarVendedores,
-  faltantesDelPadron,
+  faltantesDelPadron, actualizarPerfil, setActivo, resetearPass, eliminarUsuario,
 } from './auth.js';
 import { MIN_PASS, passInicial, PADRON } from './config.js';
 import { esc, fromISO, formatShort, formatLargo, hoyISO } from './utils.js';
-import { nom, local } from './alias.js';
+import { nom, local, texto } from './alias.js';
 import { DEMO } from './db.js';
 import { getModulo, listaModulos } from './modules.js';
-import { HORIZONTE_MINIMO_DIAS, objetivoDeCobertura, diasRestantes } from './schedule.js';
+import {
+  HORIZONTE_MINIMO_DIAS, objetivoDeCobertura, diasRestantes, bajaVendedor, renombrarVendedor,
+} from './schedule.js';
+import {
+  TIPOS, crearAusencia, borrarAusencia, proponerReemplazos, mostrarReemplazos,
+  aplicarReemplazo, rechazarReemplazo, aplicarTodosLosReemplazos, rechazarTodosLosReemplazos,
+} from './ausencias.js';
+import {
+  listarAuditoria, autoresDelHistorial, describirCambio, definirVendedores,
+  ETIQUETA_ENTIDAD, ENTIDADES_POSIBLES, ACCIONES_POSIBLES,
+} from './auditoria.js';
+import { temaElegido, elegirTema, iniciarTema, registrarServiceWorker } from './tema.js';
 import {
   renderCronograma, renderMiHorario, elegirPeriodo, elegirVendedor, setPedidosPropios, irAHoy,
   elegirVista, moverSemana,
@@ -488,9 +499,18 @@ function abrirSelectorCelda(td, mod, iso, turno) {
   celdaEnEdicion?.cerrar();                // sólo uno a la vez
 
   const actual = mod.cronograma[iso]?.[turno] || '';
+  // Quien está de vacaciones o dado de baja no se ofrece. El que ya estaba
+  // asignado sí aparece aunque no esté disponible: si no, la celda mostraría
+  // un nombre que el desplegable niega, y no habría cómo sacarlo salvo
+  // eligiendo a otro.
+  const ofrecidos = mod.vendedores.filter((v) => v === actual || mod.disponible(v, iso));
   const opciones = ['<option value="">— sin asignar —</option>'].concat(
-    mod.vendedores.map((v) => `<option value="${esc(v)}"${v === actual ? ' selected' : ''}>`
-      + `${esc(nom(v))}</option>`),
+    ofrecidos.map((v) => {
+      const a = !mod.disponible(v, iso) ? mod.ausenciaDe(v, iso) : null;
+      const marca = a ? ` — ${a.tipo}` : '';
+      return `<option value="${esc(v)}"${v === actual ? ' selected' : ''}>`
+        + `${esc(nom(v))}${esc(marca)}</option>`;
+    }),
   ).join('');
 
   const previo = td.innerHTML;
@@ -615,7 +635,15 @@ function abrirConfig() {
   if (!getSession()) return;
 
   let html = `
-    <div class="stat-heading">Cambiar mi contraseña</div>
+    <div class="stat-heading">Apariencia</div>
+    <div class="tema-sw" role="group" aria-label="Tema">
+      ${[['claro', 'Claro'], ['oscuro', 'Oscuro'], ['sistema', 'Sistema']].map(([v, t]) =>
+        `<button class="${temaElegido() === v ? 'on' : ''}" data-accion="tema" data-tema="${v}">${t}</button>`).join('')}
+    </div>
+    <div class="muted small mt-4 mb-8">Con <b>Sistema</b> sigue lo que tengas configurado en
+      el teléfono o la computadora.</div>
+
+    <hr><div class="stat-heading">Cambiar mi contraseña</div>
     <input class="txt mb-6" id="cfg-actual" type="password" placeholder="Contraseña actual" autocomplete="current-password" />
     <input class="txt mb-6" id="cfg-nueva" type="password" placeholder="Nueva contraseña" autocomplete="new-password" />
     <input class="txt mb-8" id="cfg-nueva2" type="password" placeholder="Repetir nueva contraseña" autocomplete="new-password" />
@@ -650,14 +678,44 @@ function abrirConfig() {
       <div class="muted small mt-4">Continúa la rotación vigente sin tocar lo ya cargado.
       La app lo hace sola cuando quedan menos de ${HORIZONTE_MINIMO_DIAS} días.</div>
 
+      <hr><div class="stat-heading">Vendedores y ausencias</div>
+      <div id="cfg-vendedores" class="muted small">Cargando…</div>
+
       <hr><div class="stat-heading">Usuarios</div>
       <div id="cfg-usuarios" class="muted small">Cargando…</div>`;
   }
 
+  if (esSuperadmin()) {
+    html += `<hr><div class="stat-heading">Historial de cambios</div>
+      <div class="muted small mb-8">Todo lo que se escribe en la base queda acá, con autor y
+        valores. Lo registran triggers, así que no se puede saltear desde la app.</div>
+      <div class="hist-filtros">
+        <input type="date" class="txt" id="hi-desde" aria-label="Desde" />
+        <input type="date" class="txt" id="hi-hasta" aria-label="Hasta" />
+        <select class="txt" id="hi-usuario"><option value="">Cualquier usuario</option></select>
+        <select class="txt" id="hi-pv">
+          <option value="">Los dos puntos de venta</option>
+          ${listaModulos().map((m) => `<option value="${m.id}">${esc(local(m.id, m.nombre))}</option>`).join('')}
+        </select>
+        <select class="txt" id="hi-entidad">
+          <option value="">Cualquier cosa</option>
+          ${ENTIDADES_POSIBLES.map((e) => `<option value="${e}">${esc(ETIQUETA_ENTIDAD(e))}</option>`).join('')}
+        </select>
+        <select class="txt" id="hi-accion">
+          <option value="">Cualquier acción</option>
+          ${ACCIONES_POSIBLES.map((a) => `<option value="${a}">${a}</option>`).join('')}
+        </select>
+      </div>
+      <button class="btn-secondary mt-8" data-accion="hist-filtrar">Filtrar</button>
+      <div id="cfg-historial" class="muted small mt-8">Cargando…</div>`;
+  }
+
   $('config-body').innerHTML = html;
   $('modal-config').classList.add('open');
+  if (esSuperadmin()) cargarHistorial();
   if (esAdmin()) {
     cargarUsuarios();
+    cargarVendedores();
     cargarDesplegableVendedores();
   }
 }
@@ -730,21 +788,284 @@ async function cargarUsuarios() {
         <button class="btn-primary mb-8" data-accion="crear-padron">Crear los ${faltantes.length} usuarios faltantes</button>`;
     }
 
-    html += `<div class="user-list">${usuarios.map((u) => `
-      <div class="user-row">
-        <div>${esc(u.user)} ${u.vendedor ? `<span class="muted">(${esc(nom(u.vendedor))})</span>` : ''}
-          <span class="role-tag ${u.rol === 'admin' ? 'admin' : 'vend'}">${esc(u.rol)}</span></div>
-        <div class="muted small">${u.puntoVenta ? esc(u.puntoVenta.toUpperCase()) : '—'}</div>
-        <div class="small ${u.passCambiada ? 'ok-txt' : 'warn-txt'}">${u.passCambiada ? 'Propia' : 'Por defecto'}</div>
-      </div>`).join('')}</div>
-      <div class="muted small mt-8">Para <b>resetear la contraseña</b> de alguien o <b>dar de baja</b> una cuenta,
-      entrá al panel de Supabase → Authentication → Users. Por seguridad, esas acciones no se pueden hacer desde el navegador.</div>`;
+    const vendedores = await listarVendedores();
+    html += `<div class="user-list">${usuarios.map((u) => filaUsuario(u, vendedores)).join('')}</div>`;
 
     cont.className = '';
     cont.innerHTML = html;
   } catch (e) {
     cont.innerHTML = `<div class="warn-box">No se pudieron leer los usuarios: ${esc(traducirError(e))}</div>`;
   }
+}
+
+async function cargarHistorial() {
+  const cont = $('cfg-historial');
+  if (!cont) return;
+
+  // Los ids de vendedor del registro no le dicen nada a nadie; el nombre sí.
+  const mapa = new Map();
+  for (const m of listaModulos()) {
+    for (const v of m.vendedores) { const id = m.idDe(v); if (id) mapa.set(Number(id), v); }
+  }
+  definirVendedores(mapa);
+
+  try {
+    const filas = await listarAuditoria({
+      desde: $('hi-desde')?.value || null,
+      hasta: $('hi-hasta')?.value || null,
+      usuario: $('hi-usuario')?.value || null,
+      puntoVenta: $('hi-pv')?.value || null,
+      entidad: $('hi-entidad')?.value || null,
+      accion: $('hi-accion')?.value || null,
+    });
+
+    const sel = $('hi-usuario');
+    if (sel && sel.options.length === 1) {
+      for (const u of await autoresDelHistorial()) {
+        sel.insertAdjacentHTML('beforeend', `<option value="${esc(u)}">${esc(u)}</option>`);
+      }
+    }
+
+    cont.className = '';
+    cont.innerHTML = filas.length
+      ? `<div class="hist-list">${filas.map((f) => `
+          <div class="hist-row ${esc(f.accion)}">
+            <div class="hist-meta">
+              <span class="ts">${new Date(f.ts).toLocaleString('es-AR',
+                { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+              <span class="quien">${esc(f.actor_usuario || '—')}</span>
+              <span class="role-tag">${esc(f.accion)} · ${esc(ETIQUETA_ENTIDAD(f.entidad))}</span>
+              ${f.punto_venta ? `<span class="muted">${esc(f.punto_venta.toUpperCase())}</span>` : ''}
+            </div>
+            <div class="hist-desc">${esc(describirCambio(f))}</div>
+          </div>`).join('')}</div>
+        <div class="muted small mt-4">${filas.length} cambio(s). Se muestran los 200 más recientes.</div>`
+      : '<div class="muted small">No hay cambios registrados con esos filtros.</div>';
+  } catch (e) {
+    cont.innerHTML = `<div class="warn-box">No se pudo leer el historial: ${esc(traducirError(e))}</div>`;
+  }
+}
+
+function cargarVendedores() {
+  const cont = $('cfg-vendedores');
+  if (!cont) return;
+
+  cont.className = '';
+  cont.innerHTML = listaModulos().map((mod) => {
+    const filas = mod.vendedores.map((v) => {
+      const meta = mod.metaDe(v);
+      const id = mod.idDe(v);
+      const baja = meta?.baja_desde || null;
+      const renombrado = meta?.nombre_visible || null;
+      return `<div class="vend-row${baja ? ' baja' : ''}">
+        <div><span class="pill ${mod.pillClass(v)}">${esc(nom(v))}</span>
+          ${renombrado ? `<span class="muted small">antes ${esc(v)}</span>` : ''}
+          ${baja ? `<span class="muted small">baja desde ${esc(baja)}</span>` : ''}</div>
+        <div class="user-acciones">
+          ${id === null ? '<span class="muted small">sin fila en la base</span>' : `
+            <button class="mini" data-accion="vend-renombrar" data-id="${id}" data-v="${esc(v)}">Renombrar</button>
+            ${baja
+              ? `<button class="mini" data-accion="vend-reactivar" data-id="${id}" data-v="${esc(v)}">Reactivar</button>`
+              : `<button class="mini" data-accion="vend-baja" data-id="${id}" data-v="${esc(v)}">Dar de baja</button>`}`}
+        </div>
+      </div>`;
+    }).join('');
+
+    const ausencias = mod.ausencias.length
+      ? mod.ausencias.map((a) => `<div class="vend-row">
+          <div><span class="pill ${mod.pillClass(a.vendedor)}">${esc(nom(a.vendedor))}</span>
+            <span class="muted small">${esc(a.tipo)} · ${esc(a.desde)} → ${esc(a.hasta)}</span>
+            ${a.nota ? `<span class="muted small">${esc(texto(a.nota))}</span>` : ''}</div>
+          <div class="user-acciones">
+            <button class="mini peligro" data-accion="ausencia-borrar" data-id="${a.id}"
+                    data-mod="${mod.id}">Quitar</button>
+          </div>
+        </div>`).join('')
+      : '<div class="muted small">Sin ausencias cargadas</div>';
+
+    const opcionesVend = mod.vendedores
+      .map((v) => `<option value="${esc(v)}">${esc(nom(v))}</option>`).join('');
+    const opcionesTipo = TIPOS
+      .map((t) => `<option value="${t}">${t}</option>`).join('');
+
+    return `<div class="vend-bloque">
+      <div class="stat-heading">${esc(local(mod.id, mod.nombre))}</div>
+      ${filas}
+      <div class="muted small mt-8">Ausencias</div>
+      ${ausencias}
+      <div class="ausencia-form mt-8">
+        <select class="txt" id="au-vend-${mod.id}">${opcionesVend}</select>
+        <select class="txt" id="au-tipo-${mod.id}">${opcionesTipo}</select>
+        <input type="date" class="txt" id="au-desde-${mod.id}" />
+        <input type="date" class="txt" id="au-hasta-${mod.id}" />
+      </div>
+      <button class="btn-secondary mt-8" data-accion="ausencia-crear" data-mod="${mod.id}">
+        Cargar ausencia</button>
+    </div>`;
+  }).join('');
+}
+
+async function hacerCrearAusencia(mod) {
+  const vendedor = $(`au-vend-${mod.id}`).value;
+  const tipo = $(`au-tipo-${mod.id}`).value;
+  const desde = $(`au-desde-${mod.id}`).value;
+  const hasta = $(`au-hasta-${mod.id}`).value;
+
+  if (!desde || !hasta) { alert('Faltan las fechas.'); return; }
+  if (hasta < desde) { alert('La fecha de fin es anterior a la de inicio.'); return; }
+
+  try {
+    await crearAusencia({ vendedorId: mod.idDe(vendedor), tipo, desde, hasta });
+    await mod.cargarAusencias();
+  } catch (e) {
+    alert(traducirError(e));
+    return;
+  }
+  cargarVendedores();
+
+  // La ausencia queda cargada, pero el cronograma no se toca solo: se le
+  // muestran al admin los turnos que quedan descubiertos y él decide.
+  //
+  // Configuración se cierra primero: los dos modales comparten capa y el de
+  // reemplazos quedaba detrás, invisible.
+  $('modal-config').classList.remove('open');
+  const ausencia = { vendedor, desde, hasta, tipo };
+  mostrarReemplazos(mod, ausencia, proponerReemplazos(mod, ausencia));
+}
+
+async function hacerBorrarAusencia(mod, id) {
+  if (!confirm('¿Quitar esta ausencia?\n\nLos turnos ya reemplazados quedan como están.')) return;
+  try {
+    await borrarAusencia(Number(id));
+    await mod.cargarAusencias();
+  } catch (e) { alert(traducirError(e)); }
+  cargarVendedores();
+}
+
+async function hacerRenombrarVendedor(id, vendedor) {
+  const actual = nom(vendedor);
+  const nuevo = prompt('¿Con qué nombre se muestra esta persona?\n\n'
+    + 'Cambia sólo lo que se ve: el cronograma, las estadísticas y los avisos. '
+    + 'Dejalo vacío para volver al original.', actual);
+  if (nuevo === null) return;
+
+  const limpio = nuevo.trim();
+  try {
+    // Volver al original es borrar el renombre, no guardar el nombre viejo:
+    // así la fila deja de figurar como renombrada.
+    await renombrarVendedor(Number(id), limpio && limpio !== vendedor ? limpio : null);
+    for (const m of listaModulos()) await m.cargar();
+  } catch (e) { alert(traducirError(e)); }
+  cargarVendedores();
+  for (const m of listaModulos()) renderCronograma(m);
+}
+
+async function hacerBajaVendedor(id, vendedor, dar) {
+  let desde = null;
+  if (dar) {
+    desde = prompt(`¿Desde qué fecha sale ${vendedor} de la rotación?\n\n`
+      + 'Formato AAAA-MM-DD. Lo ya cargado antes de esa fecha no se toca.', hoyISO());
+    if (!desde) return;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(desde)) { alert('Fecha inválida. Usá AAAA-MM-DD.'); return; }
+  }
+  try {
+    await bajaVendedor(Number(id), desde);
+    for (const m of listaModulos()) await m.cargar();
+  } catch (e) { alert(traducirError(e)); }
+  cargarVendedores();
+}
+
+// Qué fila está abierta en modo edición. Una sola por vez: dos formularios
+// abiertos invitan a guardar el equivocado.
+let editandoUid = null;
+
+function filaUsuario(u, vendedores) {
+  const esYo = u.uid === getSession()?.uid;
+  const baja = u.activo === false;
+
+  if (editandoUid === u.uid) {
+    const opciones = vendedores.map((v) =>
+      `<option value="${v.id}"${v.nombre === u.vendedor ? ' selected' : ''}>${esc(nom(v.nombre))} (${esc(v.punto_venta.toUpperCase())})</option>`
+    ).join('');
+    return `<div class="user-row editando">
+      <b>${esc(u.user)}</b>
+      <select class="txt" id="ed-rol">
+        <option value="vendedor"${u.rol === 'vendedor' ? ' selected' : ''}>Solo lectura</option>
+        <option value="admin"${u.rol === 'admin' ? ' selected' : ''}>Administrador (puede editar)</option>
+      </select>
+      <select class="txt" id="ed-vend">
+        <option value="">Sin vendedor asociado</option>${opciones}
+      </select>
+      <div class="user-acciones">
+        <button class="mini principal" data-accion="usuario-guardar" data-uid="${u.uid}">Guardar</button>
+        <button class="mini" data-accion="usuario-cancelar">Cancelar</button>
+      </div>
+    </div>`;
+  }
+
+  return `<div class="user-row${baja ? ' baja' : ''}">
+    <div>${esc(u.user)} ${u.vendedor ? `<span class="muted">(${esc(nom(u.vendedor))})</span>` : ''}
+      <span class="role-tag ${u.rol === 'admin' ? 'admin' : 'vend'}">${esc(u.rol)}</span>
+      ${baja ? '<span class="role-tag inactiva">desactivada</span>' : ''}</div>
+    <div class="muted small">${u.puntoVenta ? esc(u.puntoVenta.toUpperCase()) : '—'}</div>
+    <div class="small ${u.passCambiada ? 'ok-txt' : 'warn-txt'}">${u.passCambiada ? 'Propia' : 'Por defecto'}</div>
+    <div class="user-acciones">
+      <button class="mini" data-accion="usuario-editar" data-uid="${u.uid}">Editar</button>
+      <button class="mini" data-accion="usuario-reset" data-uid="${u.uid}" data-user="${esc(u.user)}">Resetear</button>
+      ${esYo ? '<span class="muted small">tu cuenta</span>' : `
+        <button class="mini" data-accion="usuario-activo" data-uid="${u.uid}"
+                data-activo="${baja ? '1' : '0'}">${baja ? 'Activar' : 'Desactivar'}</button>
+        <button class="mini peligro" data-accion="usuario-eliminar" data-uid="${u.uid}"
+                data-user="${esc(u.user)}">Eliminar</button>`}
+    </div>
+  </div>`;
+}
+
+/** Corre una operación, avisa cómo salió y vuelve a dibujar la lista. */
+async function conAviso(fn, exito) {
+  try {
+    const r = await fn();
+    if (exito) alert(typeof exito === 'function' ? exito(r) : exito);
+  } catch (e) {
+    alert(traducirError(e));
+  }
+  editandoUid = null;
+  cargarUsuarios();
+}
+
+function hacerGuardarUsuario(uid) {
+  const rol = $('ed-rol').value;
+  // El desplegable devuelve texto y vendedor_id es un entero. Postgres lo
+  // coerciona, pero guardar "1" donde va 1 rompe cualquier comparación
+  // estricta contra el padrón de vendedores.
+  const elegido = $('ed-vend').value;
+  conAviso(() => actualizarPerfil(uid, { rol, vendedorId: elegido ? Number(elegido) : null }));
+}
+
+function hacerActivarUsuario(uid, activar) {
+  const aviso = activar
+    ? '¿Reactivar esta cuenta? Va a poder volver a entrar.'
+    : '¿Desactivar esta cuenta?\n\nNo se borra nada: la persona deja de poder entrar '
+      + 'y sus turnos quedan como están.';
+  if (!confirm(aviso)) return;
+  conAviso(() => setActivo(uid, activar));
+}
+
+function hacerResetearUsuario(uid, user) {
+  if (!confirm(`Se le va a generar una contraseña temporal a "${user}", `
+    + 'y la app le va a pedir que la cambie al entrar.\n\n¿Continuar?')) return;
+  conAviso(() => resetearPass(uid),
+    (pass) => `Contraseña temporal de ${user}:\n\n    ${pass}\n\n`
+      + 'Pasásela por un medio seguro. La tiene que cambiar en el primer ingreso.');
+}
+
+function hacerEliminarUsuario(uid, user) {
+  // Escribir el nombre es la traba: un confirm suelto se acepta de memoria.
+  const escrito = prompt(`Esto elimina la cuenta "${user}" y no se puede deshacer.\n\n`
+    + 'Escribí el nombre de usuario para confirmar:');
+  if (escrito === null) return;
+  if (escrito.trim() !== user) { alert('El nombre no coincide. No se eliminó nada.'); return; }
+  conAviso(() => eliminarUsuario(uid), `Cuenta "${user}" eliminada.`);
 }
 
 async function hacerCambioPassConfig() {
@@ -837,6 +1158,27 @@ document.addEventListener('click', (ev) => {
     case 'pedido-aprobar': resolverPedido(el.dataset.id, true); break;
     case 'pedido-rechazar': resolverPedido(el.dataset.id, false); break;
     case 'pedido-cancelar': hacerCancelarPedido(el.dataset.id); break;
+    case 'tema':
+      elegirTema(el.dataset.tema);
+      // Se vuelve a dibujar para que el botón activo quede marcado.
+      abrirConfig();
+      break;
+    case 'hist-filtrar': cargarHistorial(); break;
+    case 'usuario-editar': editandoUid = el.dataset.uid; cargarUsuarios(); break;
+    case 'usuario-cancelar': editandoUid = null; cargarUsuarios(); break;
+    case 'usuario-guardar': hacerGuardarUsuario(el.dataset.uid); break;
+    case 'usuario-activo': hacerActivarUsuario(el.dataset.uid, el.dataset.activo === '1'); break;
+    case 'usuario-reset': hacerResetearUsuario(el.dataset.uid, el.dataset.user); break;
+    case 'usuario-eliminar': hacerEliminarUsuario(el.dataset.uid, el.dataset.user); break;
+    case 'ausencia-crear': if (mod) hacerCrearAusencia(mod); break;
+    case 'ausencia-borrar': if (mod) hacerBorrarAusencia(mod, el.dataset.id); break;
+    case 'vend-renombrar': hacerRenombrarVendedor(el.dataset.id, el.dataset.v); break;
+    case 'vend-baja': hacerBajaVendedor(el.dataset.id, el.dataset.v, true); break;
+    case 'vend-reactivar': hacerBajaVendedor(el.dataset.id, el.dataset.v, false); break;
+    case 'reemplazo-aplicar': aplicarReemplazo(el.dataset.i); break;
+    case 'reemplazo-rechazar': rechazarReemplazo(el.dataset.i); break;
+    case 'reemplazo-aplicar-todos': aplicarTodosLosReemplazos(); break;
+    case 'reemplazo-rechazar-todos': rechazarTodosLosReemplazos(); break;
     case 'pass-gate-submit': hacerCambioObligatorio(); break;
     case 'pass-gate-salir': logout(); break;
 
@@ -1002,6 +1344,8 @@ document.querySelectorAll('.modal-backdrop').forEach((bd) => {
 });
 
 vigilarConexion();
+iniciarTema();
+registrarServiceWorker(DEMO);
 
 if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
   console.info('Contraseñas iniciales del padrón:',

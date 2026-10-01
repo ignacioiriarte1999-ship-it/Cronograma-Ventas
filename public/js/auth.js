@@ -5,16 +5,18 @@
 // las policies RLS lo verifican en cada consulta. El navegador no decide
 // quién es admin: lo decide Postgres.
 
-import { sb, clienteAislado, traducirDb } from './db.js';
+import { sb, clienteAislado, traducirDb, DEMO } from './db.js';
 import { userToEmail, emailToUser, MIN_PASS, PADRON, passInicial } from './config.js';
 import { normUser } from './utils.js';
 
 /** Sesión activa: { uid, user, rol, vendedor, puntoVenta, passCambiada } */
 let sesion = null;
 export const getSession = () => sesion;
-export const esAdmin = () => sesion?.rol === 'admin';
+// Un superadmin es también admin: si no, perdería la edición al ascender.
+export const esAdmin = () => sesion?.rol === 'admin' || sesion?.rol === 'superadmin';
+export const esSuperadmin = () => sesion?.rol === 'superadmin';
 
-const SELECT_PERFIL = 'usuario, rol, pass_cambiada, vendedores ( nombre, punto_venta )';
+const SELECT_PERFIL = 'usuario, rol, pass_cambiada, activo, vendedores ( nombre, punto_venta )';
 
 function armarSesion(uid, email, perfil) {
   return {
@@ -24,6 +26,9 @@ function armarSesion(uid, email, perfil) {
     vendedor: perfil.vendedores?.nombre || null,
     puntoVenta: perfil.vendedores?.punto_venta || null,
     passCambiada: perfil.pass_cambiada === true,
+    // La columna es nueva: si todavía no corrió la migración, activo viene
+    // undefined y la cuenta se toma como activa.
+    activo: perfil.activo !== false,
   };
 }
 
@@ -53,6 +58,15 @@ export function observarSesion(callback) {
       await sb.auth.signOut();
       sesion = null;
       callback(null, 'Tu cuenta existe pero no tiene un perfil asignado. Pedile al administrador que te dé de alta.');
+      return;
+    }
+    if (perfil.activo === false) {
+      // Las policies ya no la dejan leer nada; sin esto vería la app vacía y
+      // sin explicación. Su propio perfil sí lo puede leer, y de ahí sale
+      // este aviso.
+      await sb.auth.signOut();
+      sesion = null;
+      callback(null, 'Tu cuenta está desactivada. Hablá con el administrador.');
       return;
     }
     sesion = armarSesion(session.user.id, session.user.email, perfil);
@@ -134,17 +148,69 @@ export async function cambiarPassword(passActual, passNueva) {
 export async function listarUsuarios() {
   const { data, error } = await sb
     .from('perfiles')
-    .select('id, usuario, rol, pass_cambiada, vendedores ( nombre, punto_venta )')
+    .select('id, usuario, rol, pass_cambiada, activo, vendedores ( nombre, punto_venta )')
     .order('usuario');
   if (error) throw error;
   return (data || []).map((p) => ({
     uid: p.id,
     user: p.usuario,
     rol: p.rol,
+    activo: p.activo !== false,
     passCambiada: p.pass_cambiada,
     vendedor: p.vendedores?.nombre || null,
     puntoVenta: p.vendedores?.punto_venta || null,
   }));
+}
+
+/** Cambia el rol y el vendedor asociado de una cuenta. */
+export async function actualizarPerfil(uid, { rol, vendedorId }) {
+  const { error } = await sb
+    .from('perfiles').update({ rol, vendedor_id: vendedorId || null }).eq('id', uid);
+  if (error) throw error;
+}
+
+/**
+ * Baja y alta lógica.
+ *
+ * Desactivar no borra nada: la cuenta deja de ver datos —lo imponen las
+ * policies, no el navegador— y los turnos que tenga cargados siguen ahí.
+ */
+export async function setActivo(uid, activo) {
+  if (uid === sesion?.uid) throw new Error('No podés desactivar tu propia cuenta.');
+  const { error } = await sb.from('perfiles').update({ activo }).eq('id', uid);
+  if (error) throw error;
+}
+
+/**
+ * Llama a la Edge Function que hace lo que necesita la clave service_role.
+ *
+ * Esa clave saltea todas las policies, así que no puede estar en el navegador;
+ * la función verifica por su cuenta que quien llama sea un admin activo.
+ */
+async function llamarAdmin(accion, uid) {
+  if (DEMO) throw new Error('En la demostración no se tocan cuentas reales.');
+  const { data, error } = await sb.functions.invoke('admin-usuarios', { body: { accion, uid } });
+  if (error) {
+    // invoke() deja el cuerpo de la respuesta en error.context, no en data.
+    let detalle = '';
+    try { detalle = (await error.context?.json())?.error || ''; } catch (e) { /* sin cuerpo */ }
+    throw new Error(detalle
+      || 'No se pudo completar la operación. Verificá que la función admin-usuarios esté desplegada.');
+  }
+  if (data?.error) throw new Error(data.error);
+  return data;
+}
+
+/** Deja una contraseña temporal y obliga a cambiarla en el próximo ingreso. */
+export async function resetearPass(uid) {
+  const { pass } = await llamarAdmin('reset', uid);
+  return pass;
+}
+
+/** Elimina la cuenta de Auth; el perfil se va en cascada. */
+export async function eliminarUsuario(uid) {
+  if (uid === sesion?.uid) throw new Error('No podés eliminar tu propia cuenta.');
+  await llamarAdmin('eliminar', uid);
 }
 
 /** Busca el id del vendedor por nombre y punto de venta. */

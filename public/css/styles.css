@@ -294,18 +294,7 @@ table.grid td.feriado, table.grid td.cerrado { color: var(--muted); font-style: 
   font-size: 11px;
   font-weight: 500;
 }
-.pill.v0 { background: rgba(74, 222, 128, 0.18); color: var(--c1); }
-.pill.v1 { background: rgba(96, 165, 250, 0.18); color: var(--c2); }
-.pill.v2 { background: rgba(251, 191, 36, 0.18); color: var(--c3); }
-.pill.v3 { background: rgba(244, 114, 182, 0.18); color: #f472b6; }
-.pill.v4 { background: rgba(248, 113, 113, 0.18); color: #f87171; }
-.pill.v5 { background: rgba(52, 211, 153, 0.18); color: #34d399; }
-.pill.v6 { background: rgba(129, 140, 248, 0.18); color: #818cf8; }
-.pill.v7 { background: rgba(251, 113, 133, 0.18); color: #fb7185; }
-.pill.v8 { background: rgba(103, 232, 249, 0.18); color: #67e8f9; }
-.pill.v9 { background: rgba(251, 146, 60, 0.18); color: #fb923c; }
-.pill.v10 { background: rgba(167, 139, 250, 0.18); color: #a78bfa; }
-.pill.v11 { background: rgba(190, 242, 100, 0.18); color: #bef264; }
+/* Las pills de vendedor se definen más abajo, junto al resto del tema. */
 
 .problemas {
   padding: 8px 14px;
@@ -522,7 +511,7 @@ hr { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
 .user-list { display: flex; flex-direction: column; gap: 6px; }
 .user-row {
   display: grid;
-  grid-template-columns: 1fr 60px 90px;
+  grid-template-columns: 1fr 60px 90px auto;
   gap: 8px;
   padding: 6px 8px;
   background: var(--bg);
@@ -537,8 +526,7 @@ hr { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
   background: var(--card);
   color: var(--muted);
 }
-.role-tag.admin { background: rgba(255, 107, 122, 0.15); color: var(--err); }
-.role-tag.vend { background: rgba(96, 165, 250, 0.15); color: var(--c2); }
+/* Los colores de .role-tag se definen más abajo, junto al resto del tema. */
 
 /* ============================================================
    VISTA "MI HORARIO"
@@ -981,6 +969,208 @@ select.celda-sel:focus { outline: none; }
 /* La celda editable se insinúa al pasar el mouse; el cursor ya era pointer. */
 table.grid td.cell:not(.ro) .pill { border: 1px solid transparent; }
 table.grid td.cell:not(.ro):hover .pill { border-color: rgba(29, 78, 216, 0.35); }
+
+/* Acciones por fila en Configuración › Usuarios --------------- */
+.user-acciones { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.user-acciones button.mini {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+}
+.user-acciones button.mini:hover { background: var(--card); }
+.user-acciones button.mini.principal { background: var(--accent); border-color: var(--accent); color: #fff; }
+.user-acciones button.mini.principal:hover { background: var(--accent-hover); }
+/* Eliminar se pinta distinto sólo al apuntarlo: en reposo compite con el
+   resto de los botones y se toca sin querer. */
+.user-acciones button.mini.peligro:hover { background: var(--err); border-color: var(--err); color: #fff; }
+
+/* Una cuenta dada de baja se sigue viendo, apagada. */
+.user-row.baja > div:first-child { opacity: 0.55; }
+.role-tag.inactiva { background: var(--card); color: var(--muted); border: 1px solid var(--border); }
+
+/* La fila en edición ocupa el ancho entero: dos desplegables no entran en la
+   columna del nombre. */
+.user-row.editando { grid-template-columns: 1fr; gap: 6px; }
+.user-row.editando select.txt { width: 100%; }
+
+@media (max-width: 600px) {
+  .user-row { grid-template-columns: 1fr auto; }
+  .user-row > div:nth-child(2), .user-row > div:nth-child(3) { display: none; }
+  .user-acciones { justify-content: flex-start; }
+}
+
+/* Vendedores y ausencias ------------------------------------- */
+.vend-bloque { margin-bottom: 14px; }
+.vend-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 5px 8px;
+  background: var(--bg);
+  border-radius: 4px;
+  font-size: 11px;
+  margin-bottom: 4px;
+}
+.vend-row.baja > div:first-child { opacity: 0.55; }
+.vend-row .muted.small { margin-left: 6px; }
+.ausencia-form { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+@media (max-width: 520px) {
+  .ausencia-form { grid-template-columns: 1fr; }
+}
+
+/* Historial de cambios (superadmin) --------------------------- */
+.hist-filtros { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+@media (max-width: 600px) { .hist-filtros { grid-template-columns: 1fr 1fr; } }
+.hist-list { display: flex; flex-direction: column; gap: 4px; max-height: 340px; overflow-y: auto; }
+.hist-row {
+  padding: 6px 8px;
+  background: var(--bg);
+  border-radius: 4px;
+  border-left: 3px solid var(--border);
+  font-size: 11px;
+}
+.hist-row.alta   { border-left-color: var(--ok); }
+.hist-row.cambio { border-left-color: var(--accent); }
+.hist-row.baja   { border-left-color: var(--err); }
+.hist-meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 2px; }
+.hist-meta .ts { color: var(--muted); font-family: var(--mono); font-size: 10px; }
+.hist-meta .quien { font-weight: 600; }
+.hist-desc { color: var(--muted); word-break: break-word; }
+
+/* ============================================================
+   TEMA OSCURO
+   ============================================================
+   Dos entradas al mismo juego de tokens:
+
+     - el sistema, cuando el visitante no eligió nada. El guard
+       :root:not([data-tema="claro"]) hace que una elección manual de "claro"
+       le gane al sistema;
+     - la elección manual "oscuro", que gana siempre.
+
+   Lo único que cambia son las variables: ninguna regla de layout se duplica,
+   así que una pantalla nueva hereda los dos temas sin trabajo extra. */
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-tema="claro"]) {
+    --bg: #0f1621;
+    --surface: #16202e;
+    --card: #1b2736;
+    --border: #2a3850;
+    --text: #e6ecf5;
+    --muted: #94a3b8;
+    --accent: #5b8cff;
+    --accent-hover: #7aa2ff;
+    --accent2: #16294f;
+    --accent-soft: rgba(91, 140, 255, 0.16);
+    --ok: #4ade80;
+    --warn: #fbbf24;
+    --err: #f87171;
+    --c1: #4ade80;
+    --c2: #60a5fa;
+    --c3: #fbbf24;
+    --sombra: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --sombra-md: 0 4px 14px rgba(0, 0, 0, 0.5);
+    color-scheme: dark;
+  }
+}
+
+:root[data-tema="oscuro"] {
+  --bg: #0f1621;
+  --surface: #16202e;
+  --card: #1b2736;
+  --border: #2a3850;
+  --text: #e6ecf5;
+  --muted: #94a3b8;
+  --accent: #5b8cff;
+  --accent-hover: #7aa2ff;
+  --accent2: #16294f;
+  --accent-soft: rgba(91, 140, 255, 0.16);
+  --ok: #4ade80;
+  --warn: #fbbf24;
+  --err: #f87171;
+  --c1: #4ade80;
+  --c2: #60a5fa;
+  --c3: #fbbf24;
+  --sombra: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --sombra-md: 0 4px 14px rgba(0, 0, 0, 0.5);
+  color-scheme: dark;
+}
+
+/* Lo que no sale de un token y hay que repetir ---------------- */
+/* Los chips de vendedor llevan color propio: sobre fondo oscuro, el texto va
+   claro y el fondo tenue, al revés que en el tema claro. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-tema="claro"]) .pill.v0  { background: rgba(74, 222, 128, 0.16);  color: #86efac; }
+  :root:not([data-tema="claro"]) .pill.v1  { background: rgba(96, 165, 250, 0.16);  color: #93c5fd; }
+  :root:not([data-tema="claro"]) .pill.v2  { background: rgba(251, 191, 36, 0.16);  color: #fcd34d; }
+  :root:not([data-tema="claro"]) .pill.v3  { background: rgba(244, 114, 182, 0.16); color: #f9a8d4; }
+  :root:not([data-tema="claro"]) .pill.v4  { background: rgba(248, 113, 113, 0.16); color: #fca5a5; }
+  :root:not([data-tema="claro"]) .pill.v5  { background: rgba(45, 212, 191, 0.16);  color: #5eead4; }
+  :root:not([data-tema="claro"]) .pill.v6  { background: rgba(129, 140, 248, 0.16); color: #a5b4fc; }
+  :root:not([data-tema="claro"]) .pill.v7  { background: rgba(251, 113, 133, 0.16); color: #fda4af; }
+  :root:not([data-tema="claro"]) .pill.v8  { background: rgba(56, 189, 248, 0.16);  color: #7dd3fc; }
+  :root:not([data-tema="claro"]) .pill.v9  { background: rgba(251, 146, 60, 0.16);  color: #fdba74; }
+  :root:not([data-tema="claro"]) .pill.v10 { background: rgba(167, 139, 250, 0.16); color: #c4b5fd; }
+  :root:not([data-tema="claro"]) .pill.v11 { background: rgba(190, 242, 100, 0.16); color: #d9f99d; }
+  :root:not([data-tema="claro"]) .badge      { background: #1f2c3f; color: #a9b6c9; }
+  :root:not([data-tema="claro"]) .badge.ok   { background: rgba(74, 222, 128, 0.16); color: var(--ok); }
+  :root:not([data-tema="claro"]) .badge.err  { background: rgba(248, 113, 113, 0.16); color: var(--err); }
+  :root:not([data-tema="claro"]) .badge.warn { background: rgba(251, 191, 36, 0.16); color: var(--warn); }
+  :root:not([data-tema="claro"]) table.grid th { background: var(--card); color: #a9b6c9; }
+}
+
+:root[data-tema="oscuro"] .pill.v0  { background: rgba(74, 222, 128, 0.16);  color: #86efac; }
+:root[data-tema="oscuro"] .pill.v1  { background: rgba(96, 165, 250, 0.16);  color: #93c5fd; }
+:root[data-tema="oscuro"] .pill.v2  { background: rgba(251, 191, 36, 0.16);  color: #fcd34d; }
+:root[data-tema="oscuro"] .pill.v3  { background: rgba(244, 114, 182, 0.16); color: #f9a8d4; }
+:root[data-tema="oscuro"] .pill.v4  { background: rgba(248, 113, 113, 0.16); color: #fca5a5; }
+:root[data-tema="oscuro"] .pill.v5  { background: rgba(45, 212, 191, 0.16);  color: #5eead4; }
+:root[data-tema="oscuro"] .pill.v6  { background: rgba(129, 140, 248, 0.16); color: #a5b4fc; }
+:root[data-tema="oscuro"] .pill.v7  { background: rgba(251, 113, 133, 0.16); color: #fda4af; }
+:root[data-tema="oscuro"] .pill.v8  { background: rgba(56, 189, 248, 0.16);  color: #7dd3fc; }
+:root[data-tema="oscuro"] .pill.v9  { background: rgba(251, 146, 60, 0.16);  color: #fdba74; }
+:root[data-tema="oscuro"] .pill.v10 { background: rgba(167, 139, 250, 0.16); color: #c4b5fd; }
+:root[data-tema="oscuro"] .pill.v11 { background: rgba(190, 242, 100, 0.16); color: #d9f99d; }
+:root[data-tema="oscuro"] .badge      { background: #1f2c3f; color: #a9b6c9; }
+:root[data-tema="oscuro"] .badge.ok   { background: rgba(74, 222, 128, 0.16); color: var(--ok); }
+:root[data-tema="oscuro"] .badge.err  { background: rgba(248, 113, 113, 0.16); color: var(--err); }
+:root[data-tema="oscuro"] .badge.warn { background: rgba(251, 191, 36, 0.16); color: var(--warn); }
+:root[data-tema="oscuro"] table.grid th { background: var(--card); color: #a9b6c9; }
+
+/* Selector de tema ------------------------------------------- */
+.tema-sw { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.tema-sw button {
+  background: var(--surface);
+  color: var(--muted);
+  border: 0;
+  padding: 7px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color .15s ease, color .15s ease;
+}
+.tema-sw button + button { border-left: 1px solid var(--border); }
+.tema-sw button:hover:not(.on) { background: var(--card); }
+.tema-sw button.on { background: var(--accent); color: #fff; }
+
+/* Etiquetas de rol en oscuro: el fondo claro del tema base las dejaba
+   ilegibles sobre la fila oscura. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-tema="claro"]) .role-tag       { background: #1f2c3f; color: #a9b6c9; }
+  :root:not([data-tema="claro"]) .role-tag.admin { background: rgba(248, 113, 113, 0.16); color: #fca5a5; }
+  :root:not([data-tema="claro"]) .role-tag.vend  { background: rgba(96, 165, 250, 0.16); color: #93c5fd; }
+}
+:root[data-tema="oscuro"] .role-tag       { background: #1f2c3f; color: #a9b6c9; }
+:root[data-tema="oscuro"] .role-tag.admin { background: rgba(248, 113, 113, 0.16); color: #fca5a5; }
+:root[data-tema="oscuro"] .role-tag.vend  { background: rgba(96, 165, 250, 0.16); color: #93c5fd; }
 
 /* Carga automática de feriados ------------------------------- */
 .feriado-auto { display: grid; grid-template-columns: 1fr auto; gap: 6px; }
