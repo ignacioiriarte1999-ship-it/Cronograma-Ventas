@@ -239,8 +239,14 @@ async function refrescarPedidos() {
     if (esAdmin()) {
       const n = await contarPendientes();
       const btn = $('btn-pedidos');
-      btn.style.display = estaInstalado() && n > 0 ? '' : 'none';
-      $('pedidos-badge').textContent = n;
+      // El botón se muestra siempre, aunque no haya nada pendiente. Antes se
+      // escondía con cero, y eso dejaba al admin sin forma de entrar a la
+      // bandeja: no podía revisar lo que ya había aprobado o rechazado, ni
+      // enterarse de que la función existía. El número sí desaparece.
+      btn.style.display = estaInstalado() ? '' : 'none';
+      const badge = $('pedidos-badge');
+      badge.textContent = n;
+      badge.style.display = n > 0 ? '' : 'none';
     } else {
       const mios = await listarPedidos({ limite: 30 });
       // El vendedor ve el botón para consultar el estado de lo que pidió, pero
