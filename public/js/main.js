@@ -1313,7 +1313,8 @@ function agregarFeriado(mod) {
   const motivo = $(`fer-nombre-${mod.id}`).value.trim() || 'Feriado';
   if (!fecha) { alert('Elegí una fecha.'); return; }
   if (!mod.cronograma[fecha]) { alert('Esa fecha está fuera del período del cronograma.'); return; }
-  mod.agregarFeriado(fecha, motivo);
+  const medioDia = $(`fer-medio-${mod.id}`)?.checked || false;
+  mod.agregarFeriado(fecha, medioDia && motivo === 'Feriado' ? 'Medio día' : motivo, medioDia);
 }
 
 document.addEventListener('keydown', (ev) => {

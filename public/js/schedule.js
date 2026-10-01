@@ -84,6 +84,7 @@ export function crearModulo(config) {
 
     cronograma: {},
     feriados: {},
+    mediosDias: {},
     desde: null,
     hasta: null,
     historial: [],
@@ -108,7 +109,7 @@ export function crearModulo(config) {
         sb.from('vendedores').select('id, nombre, orden, activo, baja_desde, nombre_visible')
           .eq('punto_venta', pv).order('orden'),
         sb.from('turnos').select('fecha, turno, vendedor_id').eq('punto_venta', pv),
-        sb.from('feriados').select('fecha, motivo').eq('punto_venta', pv),
+        sb.from('feriados').select('fecha, motivo, medio_dia').eq('punto_venta', pv),
         sb.from('historial').select('*').eq('punto_venta', pv).order('ts', { ascending: false }).limit(100),
         sb.from('revisiones').select('lunes, firma').eq('punto_venta', pv),
       ]);
@@ -138,14 +139,19 @@ export function crearModulo(config) {
         console.warn(`${pv}: faltan vendedores en la base: ${faltantes.join(', ')}`);
       }
 
-      this.feriados = Object.fromEntries(feriados.data.map((f) => [f.fecha, f.motivo]));
+      // Las dos cosas viven en la misma tabla pero no son lo mismo: el feriado
+      // cierra el día entero, el medio día sólo la tarde.
+      this.feriados = Object.fromEntries(
+        feriados.data.filter((f) => !f.medio_dia).map((f) => [f.fecha, f.motivo]));
+      this.mediosDias = Object.fromEntries(
+        feriados.data.filter((f) => f.medio_dia).map((f) => [f.fecha, f.motivo]));
 
       // El período sale de lo que hay cargado, no de una constante: así cada
       // punto de venta muestra su propio alcance sin semanas vacías al final.
       const fechas = turnos.data.map((t) => t.fecha).concat(feriados.data.map((f) => f.fecha));
       [this.desde, this.hasta] = rangoDeFechas(fechas);
 
-      this.cronograma = esqueletoSemestre(this.feriados, this.desde, this.hasta);
+      this.cronograma = esqueletoSemestre(this.feriados, this.desde, this.hasta, this.mediosDias);
       for (const t of turnos.data) {
         const celda = this.cronograma[t.fecha];
         if (!celda) continue;
@@ -379,15 +385,30 @@ export function crearModulo(config) {
       return this.aplicarCambios([{ iso, turno, vendedor: vendedor || null }]);
     },
 
-    async agregarFeriado(iso, motivo) {
-      this.feriados[iso] = motivo;
+    /**
+     * Marca un día como feriado, o como medio día si `medioDia` es verdadero.
+     *
+     * El feriado cierra la jornada entera; el medio día deja la mañana como
+     * está y sólo vacía la tarde, que es lo que pasa el 24 y el 31 de
+     * diciembre.
+     */
+    async agregarFeriado(iso, motivo, medioDia = false) {
       const c = this.cronograma[iso];
-      if (c) { c.holiday = true; c.manana = null; c.tarde = null; }
+      if (medioDia) {
+        this.mediosDias[iso] = motivo;
+        delete this.feriados[iso];
+        if (c) { c.medioDia = true; c.holiday = false; c.tarde = null; }
+      } else {
+        this.feriados[iso] = motivo;
+        delete this.mediosDias[iso];
+        if (c) { c.holiday = true; c.medioDia = false; c.manana = null; c.tarde = null; }
+      }
       this.onCambio?.(this);
       if (!esAdmin()) return;
 
       const { error } = await sb.from('feriados')
-        .upsert({ punto_venta: this.id, fecha: iso, motivo }, { onConflict: 'punto_venta,fecha' });
+        .upsert({ punto_venta: this.id, fecha: iso, motivo, medio_dia: medioDia },
+          { onConflict: 'punto_venta,fecha' });
       if (error) { avisarError('No se pudo guardar el feriado.', error); return; }
       // El día queda cerrado: se liberan los turnos que tuviera.
       await sb.from('turnos').delete().match({ punto_venta: this.id, fecha: iso });
@@ -395,8 +416,10 @@ export function crearModulo(config) {
 
     async quitarFeriado(iso) {
       delete this.feriados[iso];
+      delete this.mediosDias[iso];
       // No repone asignaciones: el admin edita a mano o regenera.
-      if (this.cronograma[iso]) this.cronograma[iso].holiday = false;
+      const c = this.cronograma[iso];
+      if (c) { c.holiday = false; c.medioDia = false; }
       this.onCambio?.(this);
       if (!esAdmin()) return;
 
@@ -415,7 +438,7 @@ export function crearModulo(config) {
         return;
       }
 
-      const nuevo = this.generar(this.feriados, this.desde, this.hasta);
+      const nuevo = this.generar(this.feriados, this.desde, this.hasta, this.mediosDias);
       this.cronograma = nuevo;
       this.revisiones = {};
       this.onCambio?.(this);
@@ -541,6 +564,20 @@ export function crearModulo(config) {
       if (!esAdmin()) return;
       const { error } = await sb.from('historial').delete().eq('punto_venta', this.id);
       if (error) avisarError('No se pudo limpiar el historial.', error);
+    },
+
+    /**
+     * Deja de dar por revisada una semana.
+     *
+     * La firma guardada significa "esto ya se miró y no cambió desde
+     * entonces". Si la semana tiene problemas sin resolver, esa afirmación
+     * es falsa: hay que mirarla de nuevo la próxima vez.
+     */
+    async olvidarRevision(lunes) {
+      if (this.revisiones[lunes] === undefined) return;
+      delete this.revisiones[lunes];
+      if (!esAdmin()) return;
+      await sb.from('revisiones').delete().match({ punto_venta: this.id, lunes });
     },
 
     async guardarRevision(lunes, firma) {

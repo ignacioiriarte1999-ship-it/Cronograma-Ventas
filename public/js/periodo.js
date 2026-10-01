@@ -122,13 +122,17 @@ export function feriadosDelRango(desde, hasta) {
 }
 
 /** Semestre vacío: domingos cerrados y los feriados que se le pasen marcados. */
-export function esqueletoSemestre(feriados = {}, desde = INICIO_SEMESTRE, hasta = FIN_SEMESTRE) {
+export function esqueletoSemestre(feriados = {}, desde = INICIO_SEMESTRE, hasta = FIN_SEMESTRE,
+  mediosDias = {}) {
   const cronograma = {};
   for (const iso of generarFechasSemestre(desde, hasta)) {
     cronograma[iso] = {
       manana: null,
       tarde: null,
       holiday: Boolean(feriados[iso]),
+      // Medio día: se trabaja la mañana y la tarde no se cubre, igual que un
+      // sábado. No es feriado — la mañana se asigna normalmente.
+      medioDia: Boolean(mediosDias[iso]),
       closed: fromISO(iso).getDay() === 0,
     };
   }

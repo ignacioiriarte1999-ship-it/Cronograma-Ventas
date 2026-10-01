@@ -139,8 +139,8 @@ export function generarSemana(tipo, semIdx) {
   return w;
 }
 
-function generar(feriados = {}, desde, hasta) {
-  const cronograma = esqueletoSemestre(feriados, desde, hasta);
+function generar(feriados = {}, desde, hasta, mediosDias = {}) {
+  const cronograma = esqueletoSemestre(feriados, desde, hasta, mediosDias);
   const semanas = agruparPorSemanaDesde(Object.keys(cronograma).sort());
 
   for (let i = 0; i < semanas.length; i++) {
@@ -152,7 +152,8 @@ function generar(feriados = {}, desde, hasta) {
       for (const iso of Object.keys(fija)) {
         if (!cronograma[iso] || cronograma[iso].holiday) continue;
         cronograma[iso].manana = fija[iso].manana || null;
-        cronograma[iso].tarde = fija[iso].tarde || null;
+        // En un medio día no se cubre la tarde, igual que el sábado.
+        cronograma[iso].tarde = cronograma[iso].medioDia ? null : (fija[iso].tarde || null);
       }
       continue;
     }
@@ -168,7 +169,7 @@ function generar(feriados = {}, desde, hasta) {
       const iso = toISO(addDays(lunes, d));
       if (!cronograma[iso] || cronograma[iso].holiday) continue;
       cronograma[iso].manana = w[d].manana || null;
-      cronograma[iso].tarde = w[d].tarde || null;
+      cronograma[iso].tarde = cronograma[iso].medioDia ? null : (w[d].tarde || null);
     }
   }
   return cronograma;

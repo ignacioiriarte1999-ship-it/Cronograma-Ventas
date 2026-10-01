@@ -37,8 +37,8 @@ const LP_SLOTS = [
   { dia: 5, turno: 'manana' }, // S-M
 ];
 
-function generar(feriados = {}, desde, hasta) {
-  const cronograma = esqueletoSemestre(feriados, desde, hasta);
+function generar(feriados = {}, desde, hasta, mediosDias = {}) {
+  const cronograma = esqueletoSemestre(feriados, desde, hasta, mediosDias);
   const semanas = agruparPorSemanaDesde(Object.keys(cronograma).sort());
 
   for (let w = 0; w < semanas.length; w++) {
@@ -49,8 +49,11 @@ function generar(feriados = {}, desde, hasta) {
       const vendedor = LP_VENDS[((slot - w) % 12 + 12) % 12];
       const { dia, turno } = LP_SLOTS[slot];
       const iso = toISO(addDays(lunes, dia));
-      if (!cronograma[iso] || cronograma[iso].holiday) continue;
-      cronograma[iso][turno] = vendedor;
+      const celda = cronograma[iso];
+      if (!celda || celda.holiday) continue;
+      // En un medio día la tarde no se cubre, igual que el sábado.
+      if (celda.medioDia && turno === 'tarde') continue;
+      celda[turno] = vendedor;
     }
   }
   return cronograma;
@@ -69,8 +72,10 @@ function detectarProblemas(sem) {
 
   for (const iso of diasLab) {
     const c = this.cronograma[iso];
-    const esSabado = fromISO(iso).getDay() === 6;
-    const turnos = esSabado ? ['manana'] : ['manana', 'tarde'];
+    // Sábados y medios días se trabajan sólo a la mañana: su tarde no es un
+    // slot vacío, es un turno que no existe.
+    const soloManana = fromISO(iso).getDay() === 6 || c.medioDia;
+    const turnos = soloManana ? ['manana'] : ['manana', 'tarde'];
     for (const t of turnos) {
       if (c[t]) cuenta[c[t]] = (cuenta[c[t]] || 0) + 1;
       else vacios.push({ iso, turno: t });
