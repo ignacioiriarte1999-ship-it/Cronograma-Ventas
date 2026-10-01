@@ -49,7 +49,7 @@ const ALIAS = {
 const LOCALES = { cc: 'Sucursal Centro', lp: 'Sucursal Norte' };
 
 export const USUARIOS_DEMO = [
-  { usuario: 'admin', pass: 'demo1234', rol: 'admin', vendedor: null, etiqueta: 'Administrador' },
+  { usuario: 'admin', pass: 'demo1234', rol: 'superadmin', vendedor: null, etiqueta: 'Administrador' },
   { usuario: 'aguirre', pass: 'demo1234', rol: 'vendedor', vendedor: 'Imbaud', etiqueta: 'Vendedor (Sucursal Centro)' },
   { usuario: 'duarte', pass: 'demo1234', rol: 'vendedor', vendedor: 'Arevalo', etiqueta: 'Vendedor (Sucursal Norte)' },
 ];
@@ -60,8 +60,9 @@ export const USUARIOS_DEMO = [
 const T = {
   puntos_venta: [], vendedores: [], perfiles: [],
   turnos: [], feriados: [], historial: [], revisiones: [], intercambios: [],
+  ausencias: [], auditoria: [],
 };
-let secuencias = { vendedores: 0, historial: 0, intercambios: 0 };
+let secuencias = { vendedores: 0, historial: 0, intercambios: 0, ausencias: 0, auditoria: 0 };
 const proximo = (t) => ++secuencias[t];
 
 const DESDE = '2026-07-06';
@@ -113,8 +114,26 @@ export async function sembrarDemo() {
     }
   }
 
+  // Historial de cambios: unas pocas filas de ejemplo. En la app real las
+  // escriben triggers; acá se siembran porque el backend en memoria no los tiene.
+  const hace = (h) => new Date(Date.now() - h * 3600000).toISOString();
+  T.auditoria.push(
+    { id: 1, ts: hace(2), actor: 'uid-admin', actor_usuario: 'admin', punto_venta: 'lp',
+      accion: 'cambio', entidad: 'turnos', clave: '2026-10-05',
+      antes: { fecha: '2026-10-05', turno: 'tarde', vendedor_id: 4 },
+      despues: { fecha: '2026-10-05', turno: 'tarde', vendedor_id: 14 } },
+    { id: 2, ts: hace(26), actor: 'uid-admin', actor_usuario: 'admin', punto_venta: 'cc',
+      accion: 'alta', entidad: 'feriados', clave: '2026-12-08',
+      antes: null, despues: { fecha: '2026-12-08', motivo: 'Inmaculada Concepción de María' } },
+    { id: 3, ts: hace(50), actor: 'uid-admin', actor_usuario: 'admin', punto_venta: null,
+      accion: 'cambio', entidad: 'perfiles', clave: 'duarte',
+      antes: { usuario: 'duarte', rol: 'vendedor', activo: true },
+      despues: { usuario: 'duarte', rol: 'vendedor', activo: false } },
+  );
+  secuencias.auditoria = 3;
+
   // Perfiles: un admin y un usuario por vendedor.
-  T.perfiles.push({ id: 'uid-admin', usuario: 'admin', rol: 'admin', vendedor_id: null, pass_cambiada: true });
+  T.perfiles.push({ id: 'uid-admin', usuario: 'admin', rol: 'superadmin', vendedor_id: null, pass_cambiada: true });
   for (const v of T.vendedores) {
     T.perfiles.push({
       id: `uid-${v.id}`,

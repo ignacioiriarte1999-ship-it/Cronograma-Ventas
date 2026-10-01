@@ -10,6 +10,7 @@ import { sb, traducirDb } from './db.js';
 import { esAdmin, getSession } from './auth.js';
 import { esqueletoSemestre, rangoDeFechas, domingoDe, feriadosDelRango } from './periodo.js';
 import { toISO, fromISO, addDays, hoyISO, DIAS_LARGOS } from './utils.js';
+import { definirVisibles } from './alias.js';
 
 const avisarError = (contexto, error) => {
   console.error(contexto, error);
@@ -33,6 +34,44 @@ export function diasRestantes(hastaISO) {
   return Math.round((fromISO(hastaISO) - hoy) / 86400000);
 }
 
+/**
+ * Renombres cargados, juntando los dos puntos de venta.
+ *
+ * El diccionario de alias es uno solo para toda la app, así que cada módulo
+ * no puede publicar el suyo por separado: se rearma entero cada vez.
+ */
+const visiblesPorModulo = new Map();
+
+function publicarVisibles() {
+  const todo = {};
+  for (const parcial of visiblesPorModulo.values()) Object.assign(todo, parcial);
+  definirVisibles(todo);
+}
+
+/**
+ * Cambia el nombre que se muestra. Con `visible = null` vuelve al original.
+ *
+ * No toca `vendedores.nombre`: ese es el identificador con el que están
+ * escritas las reglas de ContacCenter, y cambiarlo rompería la generación.
+ */
+export async function renombrarVendedor(id, visible) {
+  const { error } = await sb.from('vendedores')
+    .update({ nombre_visible: visible || null }).eq('id', id);
+  if (error) throw new Error(traducirDb(error));
+}
+
+/**
+ * Baja con fecha, o reactivación con `desde = null`.
+ *
+ * Desde ese día el vendedor no puede tomar turnos nuevos; lo ya cargado antes
+ * no se toca, para que el historial siga teniendo sentido.
+ */
+export async function bajaVendedor(id, desde) {
+  const { error } = await sb.from('vendedores')
+    .update({ baja_desde: desde, activo: desde === null }).eq('id', id);
+  if (error) throw new Error(traducirDb(error));
+}
+
 export function crearModulo(config) {
   return {
     id: config.id,
@@ -50,9 +89,13 @@ export function crearModulo(config) {
     historial: [],
     revisiones: {},
 
+    ausencias: [],
+
     /** nombre → id y id → nombre, para traducir entre la app y la base. */
     _idPorNombre: new Map(),
     _nombrePorId: new Map(),
+    /** nombre → fila de vendedores, para mirar activo y baja_desde. */
+    _metaPorNombre: new Map(),
     _canal: null,
     onCambio: null,
 
@@ -62,12 +105,16 @@ export function crearModulo(config) {
     async cargar() {
       const pv = this.id;
       const [vend, turnos, feriados, hist, revs] = await Promise.all([
-        sb.from('vendedores').select('id, nombre, orden').eq('punto_venta', pv).order('orden'),
+        sb.from('vendedores').select('id, nombre, orden, activo, baja_desde, nombre_visible')
+          .eq('punto_venta', pv).order('orden'),
         sb.from('turnos').select('fecha, turno, vendedor_id').eq('punto_venta', pv),
         sb.from('feriados').select('fecha, motivo').eq('punto_venta', pv),
         sb.from('historial').select('*').eq('punto_venta', pv).order('ts', { ascending: false }).limit(100),
         sb.from('revisiones').select('lunes, firma').eq('punto_venta', pv),
       ]);
+
+      // Las ausencias se piden aparte porque cuelgan del vendedor, no del
+      // punto de venta: hace falta saber primero quiénes son.
 
       for (const r of [vend, turnos, feriados, hist, revs]) {
         if (r.error) { avisarError(`No se pudo cargar ${this.nombre}.`, r.error); return false; }
@@ -75,10 +122,16 @@ export function crearModulo(config) {
 
       this._idPorNombre.clear();
       this._nombrePorId.clear();
+      this._metaPorNombre.clear();
       for (const v of vend.data) {
         this._idPorNombre.set(v.nombre, v.id);
         this._nombrePorId.set(v.id, v.nombre);
+        this._metaPorNombre.set(v.nombre, v);
       }
+
+      visiblesPorModulo.set(pv, Object.fromEntries(
+        vend.data.filter((v) => v.nombre_visible).map((v) => [v.nombre, v.nombre_visible])));
+      publicarVisibles();
 
       const faltantes = config.vendedores.filter((n) => !this._idPorNombre.has(n));
       if (faltantes.length) {
@@ -108,6 +161,7 @@ export function crearModulo(config) {
       })).reverse();
 
       this.revisiones = Object.fromEntries(revs.data.map((r) => [r.lunes, r.firma]));
+      await this.cargarAusencias();
 
       console.info(`[${this.id}] cargado —`, {
         vendedores: vend.data.length,
@@ -117,6 +171,65 @@ export function crearModulo(config) {
       });
       return true;
     },
+
+    /**
+     * Tramos en los que alguien no puede tomar turnos.
+     *
+     * La tabla puede no existir todavía —si no corrió la migración de la
+     * tarea 3.4—, así que un error acá no rompe la carga del cronograma: se
+     * anota y se sigue sin ausencias.
+     */
+    async cargarAusencias() {
+      const ids = [...this._nombrePorId.keys()];
+      if (!ids.length) { this.ausencias = []; return; }
+
+      const { data, error } = await sb
+        .from('ausencias').select('id, vendedor_id, tipo, desde, hasta, nota')
+        .in('vendedor_id', ids).order('desde');
+
+      if (error) {
+        console.warn(`[${this.id}] sin ausencias:`, error.message);
+        this.ausencias = [];
+        return;
+      }
+      this.ausencias = data.map((a) => ({
+        ...a, vendedor: this._nombrePorId.get(a.vendedor_id) || null,
+      }));
+    },
+
+    /**
+     * ¿Este vendedor puede tomar un turno ese día?
+     *
+     * Tres motivos para que no: está de baja desde una fecha anterior, la
+     * baja no tiene fecha y quedó inactivo, o hay una ausencia que cubre ese
+     * día. La baja con fecha no toca el pasado a propósito.
+     */
+    disponible(vendedor, iso) {
+      const v = this._metaPorNombre.get(vendedor);
+      if (v) {
+        if (v.baja_desde && iso >= v.baja_desde) return false;
+        if (!v.baja_desde && v.activo === false) return false;
+      }
+      const id = this._idPorNombre.get(vendedor);
+      return !this.ausencias.some((a) => a.vendedor_id === id && iso >= a.desde && iso <= a.hasta);
+    },
+
+    /** Los que pueden tomar un turno ese día, en el orden del padrón. */
+    disponiblesEn(iso) {
+      return this.vendedores.filter((v) => this.disponible(v, iso));
+    },
+
+    /** La ausencia que cubre ese día, si hay. Sirve para explicar el porqué. */
+    ausenciaDe(vendedor, iso) {
+      const id = this._idPorNombre.get(vendedor);
+      return this.ausencias.find((a) => a.vendedor_id === id && iso >= a.desde && iso <= a.hasta) || null;
+    },
+
+    /** El id que tiene ese vendedor en la base. */
+    idDe(vendedor) { return this._idPorNombre.get(vendedor) || null; },
+
+    /** La fila de `vendedores`, para mirar activo y baja_desde. */
+    metaDe(vendedor) { return this._metaPorNombre.get(vendedor) || null; },
 
     /** ¿La base está vacía para este punto de venta? */
     estaVacio() {
@@ -251,6 +364,15 @@ export function crearModulo(config) {
       if (!c || c.holiday || c.closed) return false;
       if (vendedor && !this.vendedores.includes(vendedor)) {
         console.warn(`Vendedor desconocido: ${vendedor}`);
+        return false;
+      }
+      // El desplegable ya no los ofrece, pero la regla vive acá para que valga
+      // también cuando el turno lo asigna el corrector o un reemplazo.
+      if (vendedor && !this.disponible(vendedor, iso)) {
+        const a = this.ausenciaDe(vendedor, iso);
+        alert(a
+          ? `${vendedor} está de ${a.tipo} del ${a.desde} al ${a.hasta}.`
+          : `${vendedor} ya no está en la rotación en esa fecha.`);
         return false;
       }
       if ((c[turno] || null) === (vendedor || null)) return false;   // nada que hacer
