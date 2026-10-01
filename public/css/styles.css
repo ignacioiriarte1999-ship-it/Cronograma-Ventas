@@ -274,7 +274,14 @@ table.grid th {
 table.grid th.col-dia, table.grid td.dia { width: 90px; }
 table.grid td.dia .d-nombre { color: var(--text); font-weight: 600; }
 table.grid td.dia .d-fecha { color: var(--muted); font-size: 10px; }
-table.grid tr.fila-hoy { background: rgba(108, 99, 255, 0.07); }
+/* El día de hoy. Se marca con una barra lateral además del fondo: un tinte
+   suelto se pierde entre las filas de feriado y de domingo cerrado.
+   Todo sale de los tokens, así que sigue funcionando si se agrega el tema
+   oscuro (tarea 3.8). */
+table.grid tr.fila-hoy { background: var(--accent-soft); }
+table.grid tr.fila-hoy td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+table.grid tr.fila-hoy td.dia .d-nombre,
+table.grid tr.fila-hoy td.dia .d-fecha { color: var(--accent); font-weight: 700; }
 table.grid td.cell { cursor: pointer; user-select: none; }
 table.grid td.cell.ro { cursor: default; }
 table.grid td.cell:not(.ro):hover { background: rgba(108, 99, 255, 0.12); }
@@ -652,6 +659,36 @@ select.txt option { background: var(--surface); }
 /* Selector de período ---------------------------------------- */
 .periodo-sel { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
 .periodo-sel select { width: auto; min-width: 180px; }
+.periodo-fila { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.periodo-fila button { white-space: nowrap; }
+.periodo-fila button[disabled] { opacity: 0.45; cursor: default; }
+
+/* Conmutador Semestre / Semana. Dos botones pegados leen como un solo
+   control: cuál está activo se ve sin tener que compararlos. */
+.vista-sw { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.vista-sw button {
+  background: var(--surface);
+  color: var(--muted);
+  border: 0;
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color .15s ease, color .15s ease;
+}
+.vista-sw button + button { border-left: 1px solid var(--border); }
+.vista-sw button:hover:not(.on) { background: var(--card); }
+.vista-sw button.on { background: var(--accent); color: #fff; }
+
+/* En celular la cabecera ocupa el ancho completo: con el conmutador más las
+   flechas, alineada a la derecha se partía en dos renglones desparejos.
+   Va después de las reglas de arriba porque las pisa por orden. */
+@media (max-width: 600px) {
+  .cron-title { flex-direction: column; align-items: stretch; }
+  .periodo-sel { align-items: stretch; }
+  .periodo-fila { justify-content: flex-start; }
+  .periodo-fila select { flex: 1; min-width: 0; }
+}
 
 /* Selector de vendedor en "Mi horario" ----------------------- */
 .mio-selector { margin-bottom: 16px; }
@@ -822,7 +859,6 @@ header nav.tabs button.active { color: var(--accent); font-weight: 600; }
 
 /* Tablas ------------------------------------------------------ */
 table.grid th { background: var(--card); color: #475569; }
-table.grid tr.fila-hoy { background: rgba(29, 78, 216, 0.06); }
 table.grid td.cell:not(.ro):hover { background: rgba(29, 78, 216, 0.09); }
 
 input.txt, select.txt, textarea.txt { background: var(--surface); }

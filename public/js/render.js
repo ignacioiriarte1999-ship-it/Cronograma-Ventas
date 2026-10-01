@@ -20,6 +20,61 @@ const pad2 = (n) => String(n).padStart(2, '0');
 const periodoElegido = {};
 export const elegirPeriodo = (modId, clave) => { periodoElegido[modId] = clave; };
 
+// Vista elegida por punto de venta: 'semestre' (todas las semanas del período)
+// o 'semana' (una sola, con flechas). Sobrevive a la recarga; la semana
+// concreta no, porque al volver conviene aterrizar en la actual.
+const CLAVE_VISTA = 'crono:vista';
+
+function leerVistas() {
+  // Un navegador en modo privado puede tirar al sólo tocar localStorage.
+  try { return JSON.parse(localStorage.getItem(CLAVE_VISTA)) || {}; } catch (e) { return {}; }
+}
+
+const vistaElegida = leerVistas();
+const semanaElegida = {};
+
+export function elegirVista(modId, vista) {
+  vistaElegida[modId] = vista === 'semana' ? 'semana' : 'semestre';
+  try { localStorage.setItem(CLAVE_VISTA, JSON.stringify(vistaElegida)); } catch (e) { /* sin storage */ }
+}
+
+/** El domingo de una semana, en ISO. */
+const finDe = (sem) => toISO(addDays(fromISO(sem.lunes), 6));
+
+/** Todas las semanas del cronograma, numeradas de corrido. */
+const semanasDe = (mod) =>
+  agruparPorSemanaDesde(Object.keys(mod.cronograma).sort()).map((s, i) => ({ ...s, n: i + 1 }));
+
+/**
+ * La semana que toca mostrar en vista semanal: la que quedó elegida, o la de
+ * hoy la primera vez. Deja anotada la elección para que las flechas tengan
+ * desde dónde moverse.
+ */
+function semanaVigente(mod, todas, hoy) {
+  const guardada = todas.find((s) => s.lunes === semanaElegida[mod.id]);
+  if (guardada) return guardada;
+  const sem = todas.find((s) => hoy >= s.lunes && hoy <= finDe(s)) || todas[0] || null;
+  if (sem) semanaElegida[mod.id] = sem.lunes;
+  return sem;
+}
+
+/**
+ * Corre la vista semanal una semana para atrás o para adelante.
+ *
+ * Se mueve sobre la lista completa, no sobre la del semestre, así que pasar
+ * de la última semana de diciembre a la primera de enero no es un caso
+ * especial: es el elemento siguiente.
+ */
+export function moverSemana(mod, paso) {
+  const todas = semanasDe(mod);
+  const i = todas.findIndex((s) => s.lunes === semanaElegida[mod.id]);
+  const destino = todas[i + paso];
+  if (i < 0 || !destino) return false;
+  semanaElegida[mod.id] = destino.lunes;
+  renderCronograma(mod);
+  return true;
+}
+
 const MESES_SEM = ['ene–jun', 'jul–dic'];
 const claveDe = (iso) => {
   const d = fromISO(iso);
@@ -44,23 +99,38 @@ export function renderCronograma(mod) {
   if (!container) return;
   const editable = esAdmin();
 
-  const todas = agruparPorSemanaDesde(Object.keys(mod.cronograma).sort());
+  const hoy = hoyISO();
+  const todas = semanasDe(mod);
   const periodos = periodosDe(todas);
+  const enSemana = vistaElegida[mod.id] === 'semana';
 
-  // Por defecto, el período donde cae hoy; si no hay, el primero.
-  let clave = periodoElegido[mod.id];
-  if (!clave || !periodos.some((p) => p.clave === clave)) {
-    const hoyClave = claveDe(hoyISO());
-    clave = periodos.some((p) => p.clave === hoyClave) ? hoyClave : periodos[0]?.clave;
-    periodoElegido[mod.id] = clave;
+  // `semanas` es lo que se dibuja; `clave` el semestre al que pertenece, que
+  // es lo que miden las estadísticas del costado en las dos vistas.
+  let semanas;
+  let clave;
+
+  if (enSemana) {
+    const sem = semanaVigente(mod, todas, hoy);
+    semanas = sem ? [sem] : [];
+    clave = sem ? claveDe(sem.lunes) : periodos[0]?.clave;
+  } else {
+    // Por defecto, el período donde cae hoy; si no hay, el primero.
+    clave = periodoElegido[mod.id];
+    if (!clave || !periodos.some((p) => p.clave === clave)) {
+      const hoyClave = claveDe(hoy);
+      clave = periodos.some((p) => p.clave === hoyClave) ? hoyClave : periodos[0]?.clave;
+      periodoElegido[mod.id] = clave;
+    }
+    semanas = todas.filter((s) => claveDe(s.lunes) === clave);
   }
-  const semanas = todas
-    .map((s, i) => ({ ...s, n: i + 1 }))
-    .filter((s) => claveDe(s.lunes) === clave);
+
+  // Las estadísticas siguen siendo las del semestre entero: en vista semanal
+  // el reparto de una semana suelta no dice nada del equilibrio general.
+  const delPeriodo = todas.filter((s) => claveDe(s.lunes) === clave);
 
   const totales = {};
   for (const v of mod.vendedores) totales[v] = { M: 0, T: 0, S: 0, total: 0 };
-  for (const sem of semanas) {
+  for (const sem of delPeriodo) {
     const s = mod.statsSemana(sem);
     for (const v of mod.vendedores) {
       totales[v].M += s[v].M;
@@ -71,7 +141,9 @@ export function renderCronograma(mod) {
   }
 
   container.innerHTML = `<div class="cron-wrap">
-    <main class="cron-main">${htmlSemanas(mod, semanas, editable, periodos, clave, todas.length)}</main>
+    <main class="cron-main">${htmlSemanas(mod, semanas, editable, {
+      periodos, clave, totalSemanas: todas.length, enSemana, todas, hoy,
+    })}</main>
     <aside class="cron-side">${htmlSidebar(mod, totales, editable, clave)}</aside>
   </div>`;
 }
@@ -147,6 +219,37 @@ function htmlSidebar(mod, totales, editable, clave) {
 }
 
 /** Quién abre: la mañana del primer día laborable de la semana. */
+/**
+ * Lleva la vista a la semana de hoy y la deja a la vista.
+ *
+ * Hoy puede caer en otro semestre que el que se está mirando, así que primero
+ * cambia el período —y vuelve a dibujar, porque el ancla todavía no existe en
+ * el DOM— y recién después hace scroll.
+ *
+ * Devuelve false si hoy queda fuera del cronograma cargado.
+ */
+export function irAHoy(mod) {
+  const hoy = hoyISO();
+  const todas = semanasDe(mod);
+  const sem = todas.find((s) => hoy >= s.lunes && hoy <= finDe(s));
+  if (!sem) return false;
+
+  if (vistaElegida[mod.id] === 'semana') {
+    if (semanaElegida[mod.id] !== sem.lunes) {
+      semanaElegida[mod.id] = sem.lunes;
+      renderCronograma(mod);
+    }
+  } else if (periodoElegido[mod.id] !== claveDe(sem.lunes)) {
+    periodoElegido[mod.id] = claveDe(sem.lunes);
+    renderCronograma(mod);
+  }
+
+  const destino = document.getElementById(`sem-${mod.id}-${sem.lunes}`);
+  if (!destino) return false;
+  destino.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  return true;
+}
+
 function primerTurnoDe(mod, sem) {
   for (const iso of sem.dias) {
     const c = mod.cronograma[iso];
@@ -155,19 +258,43 @@ function primerTurnoDe(mod, sem) {
   return null;
 }
 
-function htmlSemanas(mod, semanas, editable, periodos, clave, totalSemanas) {
-  const hoy = hoyISO();
+function htmlSemanas(mod, semanas, editable, ctx) {
+  const { periodos, clave, totalSemanas, enSemana, todas, hoy } = ctx;
   const opciones = periodos.map((p) =>
     `<option value="${p.clave}"${p.clave === clave ? ' selected' : ''}>${esc(etiquetaDe(p.clave))} (${p.n} sem.)</option>`
   ).join('');
+
+  // Sin hoy dentro del cronograma cargado, el botón no llevaría a ningún lado.
+  const hayHoy = !!mod.cronograma[hoy];
+  const i = enSemana && semanas[0] ? todas.findIndex((s) => s.lunes === semanas[0].lunes) : -1;
+  const btn = (accion, extra, txt) =>
+    `<button class="btn-secondary" data-accion="${accion}" data-mod="${mod.id}" ${extra}>${txt}</button>`;
+
+  const conmutador = `<div class="vista-sw" role="group" aria-label="Vista">
+    <button class="${enSemana ? '' : 'on'}" data-accion="vista" data-mod="${mod.id}" data-vista="semestre">Semestre</button>
+    <button class="${enSemana ? 'on' : ''}" data-accion="vista" data-mod="${mod.id}" data-vista="semana">Semana</button>
+  </div>`;
+
+  const controles = enSemana
+    ? `${btn('semana-prev', `${i <= 0 ? 'disabled' : ''} aria-label="Semana anterior" title="Semana anterior"`, '◀')}
+       ${btn('semana-next', `${i < 0 || i >= todas.length - 1 ? 'disabled' : ''} aria-label="Semana siguiente" title="Semana siguiente"`, '▶')}
+       ${hayHoy ? btn('ir-a-hoy', '', 'Hoy') : ''}`
+    : `${periodos.length > 1 ? `<select class="txt" data-accion="periodo" data-mod="${mod.id}">${opciones}</select>` : ''}
+       ${hayHoy ? btn('ir-a-hoy', '', 'Ir a hoy') : ''}`;
+
+  const rango = `${mod.desde || INICIO_SEMESTRE} → ${mod.hasta || FIN_SEMESTRE}`;
+  const pie = enSemana
+    ? `Semana ${semanas[0] ? semanas[0].n : '—'} de ${totalSemanas} · ${rango}`
+    : `${semanas.length} de ${totalSemanas} semanas · ${rango}`;
+
   let html = `<div class="cron-title">
     <div>
       <h1>${esc(local(mod.id, mod.nombre))}</h1>
       <div class="sub">${esc(texto(mod.subtitulo))}</div>
     </div>
     <div class="periodo-sel">
-      ${periodos.length > 1 ? `<select class="txt" data-accion="periodo" data-mod="${mod.id}">${opciones}</select>` : ''}
-      <div class="muted small">${semanas.length} de ${totalSemanas} semanas · ${mod.desde || INICIO_SEMESTRE} → ${mod.hasta || FIN_SEMESTRE}</div>
+      <div class="periodo-fila">${conmutador}${controles}</div>
+      <div class="muted small">${pie}</div>
     </div>
   </div>`;
 
