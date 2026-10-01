@@ -23,6 +23,7 @@ import {
   listarAuditoria, autoresDelHistorial, describirCambio, definirVendedores,
   ETIQUETA_ENTIDAD, ENTIDADES_POSIBLES, ACCIONES_POSIBLES,
 } from './auditoria.js';
+import { temaElegido, elegirTema, iniciarTema, registrarServiceWorker } from './tema.js';
 import { renderCronograma, renderMiHorario, elegirPeriodo, elegirVendedor, setPedidosPropios } from './render.js';
 import {
   listarPedidos, contarPendientes, suscribirPedidos, crearPedido, cancelarPedido,
@@ -604,7 +605,15 @@ function abrirConfig() {
   if (!getSession()) return;
 
   let html = `
-    <div class="stat-heading">Cambiar mi contraseña</div>
+    <div class="stat-heading">Apariencia</div>
+    <div class="tema-sw" role="group" aria-label="Tema">
+      ${[['claro', 'Claro'], ['oscuro', 'Oscuro'], ['sistema', 'Sistema']].map(([v, t]) =>
+        `<button class="${temaElegido() === v ? 'on' : ''}" data-accion="tema" data-tema="${v}">${t}</button>`).join('')}
+    </div>
+    <div class="muted small mt-4 mb-8">Con <b>Sistema</b> sigue lo que tengas configurado en
+      el teléfono o la computadora.</div>
+
+    <hr><div class="stat-heading">Cambiar mi contraseña</div>
     <input class="txt mb-6" id="cfg-actual" type="password" placeholder="Contraseña actual" autocomplete="current-password" />
     <input class="txt mb-6" id="cfg-nueva" type="password" placeholder="Nueva contraseña" autocomplete="new-password" />
     <input class="txt mb-8" id="cfg-nueva2" type="password" placeholder="Repetir nueva contraseña" autocomplete="new-password" />
@@ -1119,6 +1128,11 @@ document.addEventListener('click', (ev) => {
     case 'pedido-aprobar': resolverPedido(el.dataset.id, true); break;
     case 'pedido-rechazar': resolverPedido(el.dataset.id, false); break;
     case 'pedido-cancelar': hacerCancelarPedido(el.dataset.id); break;
+    case 'tema':
+      elegirTema(el.dataset.tema);
+      // Se vuelve a dibujar para que el botón activo quede marcado.
+      abrirConfig();
+      break;
     case 'hist-filtrar': cargarHistorial(); break;
     case 'usuario-editar': editandoUid = el.dataset.uid; cargarUsuarios(); break;
     case 'usuario-cancelar': editandoUid = null; cargarUsuarios(); break;
@@ -1203,6 +1217,8 @@ document.querySelectorAll('.modal-backdrop').forEach((bd) => {
 });
 
 vigilarConexion();
+iniciarTema();
+registrarServiceWorker(DEMO);
 
 if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
   console.info('Contraseñas iniciales del padrón:',
