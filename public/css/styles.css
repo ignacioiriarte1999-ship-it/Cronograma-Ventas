@@ -1001,3 +1001,22 @@ table.grid td.cell:not(.ro):hover .pill { border-color: rgba(29, 78, 216, 0.35);
 @media (max-width: 520px) {
   .ausencia-form { grid-template-columns: 1fr; }
 }
+
+/* Historial de cambios (superadmin) --------------------------- */
+.hist-filtros { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+@media (max-width: 600px) { .hist-filtros { grid-template-columns: 1fr 1fr; } }
+.hist-list { display: flex; flex-direction: column; gap: 4px; max-height: 340px; overflow-y: auto; }
+.hist-row {
+  padding: 6px 8px;
+  background: var(--bg);
+  border-radius: 4px;
+  border-left: 3px solid var(--border);
+  font-size: 11px;
+}
+.hist-row.alta   { border-left-color: var(--ok); }
+.hist-row.cambio { border-left-color: var(--accent); }
+.hist-row.baja   { border-left-color: var(--err); }
+.hist-meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 2px; }
+.hist-meta .ts { color: var(--muted); font-family: var(--mono); font-size: 10px; }
+.hist-meta .quien { font-weight: 600; }
+.hist-desc { color: var(--muted); word-break: break-word; }

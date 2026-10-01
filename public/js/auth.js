@@ -12,7 +12,9 @@ import { normUser } from './utils.js';
 /** Sesión activa: { uid, user, rol, vendedor, puntoVenta, passCambiada } */
 let sesion = null;
 export const getSession = () => sesion;
-export const esAdmin = () => sesion?.rol === 'admin';
+// Un superadmin es también admin: si no, perdería la edición al ascender.
+export const esAdmin = () => sesion?.rol === 'admin' || sesion?.rol === 'superadmin';
+export const esSuperadmin = () => sesion?.rol === 'superadmin';
 
 const SELECT_PERFIL = 'usuario, rol, pass_cambiada, activo, vendedores ( nombre, punto_venta )';
 

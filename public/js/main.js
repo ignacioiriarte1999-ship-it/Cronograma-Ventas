@@ -3,7 +3,7 @@
 // ============================================================
 import { vigilarConexion } from './db.js';
 import {
-  observarSesion, login, logout, getSession, esAdmin, traducirError,
+  observarSesion, login, logout, getSession, esAdmin, esSuperadmin, traducirError,
   cambiarPassword, listarUsuarios, crearPadronFaltante, crearUsuario, listarVendedores,
   faltantesDelPadron, actualizarPerfil, setActivo, resetearPass, eliminarUsuario,
 } from './auth.js';
@@ -19,6 +19,10 @@ import {
   TIPOS, crearAusencia, borrarAusencia, proponerReemplazos, mostrarReemplazos,
   aplicarReemplazo, rechazarReemplazo, aplicarTodosLosReemplazos, rechazarTodosLosReemplazos,
 } from './ausencias.js';
+import {
+  listarAuditoria, autoresDelHistorial, describirCambio, definirVendedores,
+  ETIQUETA_ENTIDAD, ENTIDADES_POSIBLES, ACCIONES_POSIBLES,
+} from './auditoria.js';
 import { renderCronograma, renderMiHorario, elegirPeriodo, elegirVendedor, setPedidosPropios } from './render.js';
 import {
   listarPedidos, contarPendientes, suscribirPedidos, crearPedido, cancelarPedido,
@@ -642,8 +646,34 @@ function abrirConfig() {
       <div id="cfg-usuarios" class="muted small">Cargando…</div>`;
   }
 
+  if (esSuperadmin()) {
+    html += `<hr><div class="stat-heading">Historial de cambios</div>
+      <div class="muted small mb-8">Todo lo que se escribe en la base queda acá, con autor y
+        valores. Lo registran triggers, así que no se puede saltear desde la app.</div>
+      <div class="hist-filtros">
+        <input type="date" class="txt" id="hi-desde" aria-label="Desde" />
+        <input type="date" class="txt" id="hi-hasta" aria-label="Hasta" />
+        <select class="txt" id="hi-usuario"><option value="">Cualquier usuario</option></select>
+        <select class="txt" id="hi-pv">
+          <option value="">Los dos puntos de venta</option>
+          ${listaModulos().map((m) => `<option value="${m.id}">${esc(local(m.id, m.nombre))}</option>`).join('')}
+        </select>
+        <select class="txt" id="hi-entidad">
+          <option value="">Cualquier cosa</option>
+          ${ENTIDADES_POSIBLES.map((e) => `<option value="${e}">${esc(ETIQUETA_ENTIDAD(e))}</option>`).join('')}
+        </select>
+        <select class="txt" id="hi-accion">
+          <option value="">Cualquier acción</option>
+          ${ACCIONES_POSIBLES.map((a) => `<option value="${a}">${a}</option>`).join('')}
+        </select>
+      </div>
+      <button class="btn-secondary mt-8" data-accion="hist-filtrar">Filtrar</button>
+      <div id="cfg-historial" class="muted small mt-8">Cargando…</div>`;
+  }
+
   $('config-body').innerHTML = html;
   $('modal-config').classList.add('open');
+  if (esSuperadmin()) cargarHistorial();
   if (esAdmin()) {
     cargarUsuarios();
     cargarVendedores();
@@ -726,6 +756,54 @@ async function cargarUsuarios() {
     cont.innerHTML = html;
   } catch (e) {
     cont.innerHTML = `<div class="warn-box">No se pudieron leer los usuarios: ${esc(traducirError(e))}</div>`;
+  }
+}
+
+async function cargarHistorial() {
+  const cont = $('cfg-historial');
+  if (!cont) return;
+
+  // Los ids de vendedor del registro no le dicen nada a nadie; el nombre sí.
+  const mapa = new Map();
+  for (const m of listaModulos()) {
+    for (const v of m.vendedores) { const id = m.idDe(v); if (id) mapa.set(Number(id), v); }
+  }
+  definirVendedores(mapa);
+
+  try {
+    const filas = await listarAuditoria({
+      desde: $('hi-desde')?.value || null,
+      hasta: $('hi-hasta')?.value || null,
+      usuario: $('hi-usuario')?.value || null,
+      puntoVenta: $('hi-pv')?.value || null,
+      entidad: $('hi-entidad')?.value || null,
+      accion: $('hi-accion')?.value || null,
+    });
+
+    const sel = $('hi-usuario');
+    if (sel && sel.options.length === 1) {
+      for (const u of await autoresDelHistorial()) {
+        sel.insertAdjacentHTML('beforeend', `<option value="${esc(u)}">${esc(u)}</option>`);
+      }
+    }
+
+    cont.className = '';
+    cont.innerHTML = filas.length
+      ? `<div class="hist-list">${filas.map((f) => `
+          <div class="hist-row ${esc(f.accion)}">
+            <div class="hist-meta">
+              <span class="ts">${new Date(f.ts).toLocaleString('es-AR',
+                { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+              <span class="quien">${esc(f.actor_usuario || '—')}</span>
+              <span class="role-tag">${esc(f.accion)} · ${esc(ETIQUETA_ENTIDAD(f.entidad))}</span>
+              ${f.punto_venta ? `<span class="muted">${esc(f.punto_venta.toUpperCase())}</span>` : ''}
+            </div>
+            <div class="hist-desc">${esc(describirCambio(f))}</div>
+          </div>`).join('')}</div>
+        <div class="muted small mt-4">${filas.length} cambio(s). Se muestran los 200 más recientes.</div>`
+      : '<div class="muted small">No hay cambios registrados con esos filtros.</div>';
+  } catch (e) {
+    cont.innerHTML = `<div class="warn-box">No se pudo leer el historial: ${esc(traducirError(e))}</div>`;
   }
 }
 
@@ -1041,6 +1119,7 @@ document.addEventListener('click', (ev) => {
     case 'pedido-aprobar': resolverPedido(el.dataset.id, true); break;
     case 'pedido-rechazar': resolverPedido(el.dataset.id, false); break;
     case 'pedido-cancelar': hacerCancelarPedido(el.dataset.id); break;
+    case 'hist-filtrar': cargarHistorial(); break;
     case 'usuario-editar': editandoUid = el.dataset.uid; cargarUsuarios(); break;
     case 'usuario-cancelar': editandoUid = null; cargarUsuarios(); break;
     case 'usuario-guardar': hacerGuardarUsuario(el.dataset.uid); break;
