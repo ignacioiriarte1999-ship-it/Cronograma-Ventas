@@ -195,7 +195,7 @@ header .userbox button:hover { border-color: var(--accent); color: var(--text); 
   .cron-wrap { grid-template-columns: 1fr; padding: 12px; }
 }
 
-main.cron-main { min-width: 0; }
+section.cron-main { min-width: 0; }
 aside.cron-side { display: flex; flex-direction: column; gap: 12px; }
 aside.cron-side .panel {
   background: var(--surface);

@@ -142,9 +142,9 @@ export function renderCronograma(mod) {
   }
 
   container.innerHTML = `<div class="cron-wrap">
-    <main class="cron-main">${htmlSemanas(mod, semanas, editable, {
+    <section class="cron-main" aria-label="Cronograma">${htmlSemanas(mod, semanas, editable, {
       periodos, clave, totalSemanas: todas.length, enSemana, todas, hoy,
-    })}</main>
+    })}</section>
     <aside class="cron-side">${htmlSidebar(mod, totales, editable, clave)}</aside>
   </div>`;
 }
@@ -168,16 +168,24 @@ function htmlSidebar(mod, totales, editable, clave) {
     </div>`;
   }
 
-  const feriados = Object.keys(mod.feriados).sort();
+  // Feriados y medios días se listan juntos: para el admin son la misma
+  // gestión —días con horario distinto— y separarlos en dos paneles obligaría
+  // a mirar en dos lados para entender una semana.
+  const dias = [
+    ...Object.keys(mod.feriados).map((iso) => ({ iso, motivo: mod.feriados[iso], medio: false })),
+    ...Object.keys(mod.mediosDias).map((iso) => ({ iso, motivo: mod.mediosDias[iso], medio: true })),
+  ].sort((a, b) => a.iso.localeCompare(b.iso));
+
   html += `<div class="panel">
-    <h2>Feriados (${feriados.length})</h2>
+    <h2>Feriados y medios días (${dias.length})</h2>
     <div class="scroll-200">
-      ${feriados.map((iso) => `
+      ${dias.map((d) => `
         <div class="feriado-item">
-          <span>${formatShort(fromISO(iso))} <span class="muted">${esc(mod.feriados[iso])}</span></span>
-          <button class="rm" data-accion="quitar-feriado" data-mod="${mod.id}" data-iso="${iso}"
-                  title="Quitar feriado">✕</button>
-        </div>`).join('') || '<div class="muted small">Sin feriados</div>'}
+          <span>${formatShort(fromISO(d.iso))} <span class="muted">${esc(texto(d.motivo))}</span>
+            ${d.medio ? '<span class="badge">medio día</span>' : ''}</span>
+          <button class="rm" data-accion="quitar-feriado" data-mod="${mod.id}" data-iso="${d.iso}"
+                  title="Quitar">✕</button>
+        </div>`).join('') || '<div class="muted small">Sin feriados ni medios días</div>'}
     </div>
     <div class="feriado-form">
       <input type="date" class="txt" id="fer-fecha-${mod.id}"
@@ -185,6 +193,8 @@ function htmlSidebar(mod, totales, editable, clave) {
       <input type="text" class="txt" id="fer-nombre-${mod.id}" placeholder="Motivo" maxlength="120" />
       <button class="btn-secondary" data-accion="agregar-feriado" data-mod="${mod.id}">+</button>
     </div>
+    <label class="check"><input type="checkbox" id="fer-medio-${mod.id}" />
+      Medio día (se trabaja sólo la mañana)</label>
     <div class="feriado-auto mt-8">
       <select class="txt" id="fer-anio-${mod.id}">
         ${aniosOfrecidos(mod).map((a) => `<option value="${a}">${a}</option>`).join('')}
@@ -201,7 +211,7 @@ function htmlSidebar(mod, totales, editable, clave) {
     <h2>Corrector automatizado</h2>
     <div class="btn-col">
       <button class="btn-secondary" data-accion="revisar" data-mod="${mod.id}">Revisar cambios recientes</button>
-      <button class="btn-secondary" data-accion="revisar-todo" data-mod="${mod.id}">Revisar todo el semestre</button>
+      <button class="btn-secondary" data-accion="revisar-todo" data-mod="${mod.id}">Revisar todo el cronograma</button>
       <button class="btn-ai" data-accion="corregir-auto" data-mod="${mod.id}">Corregir automáticamente</button>
     </div>
     <div class="muted small">Aplica en cadena las correcciones seguras y se detiene cuando no quedan más cambios posibles.</div>
@@ -390,18 +400,20 @@ function htmlDias(mod, lunes, editable, hoy) {
     }
 
     const esSabado = d.getDay() === 6;
+    // El medio día se ve y se comporta como un sábado: mañana sí, tarde no.
+    const soloManana = esSabado || c.medioDia;
     const cellM = c.manana
       ? `<span class="pill ${mod.pillClass(c.manana)}">${esc(nom(c.manana))}</span>`
       : '<span class="muted">—</span>';
     const cellT = c.tarde
       ? `<span class="pill ${mod.pillClass(c.tarde)}">${esc(nom(c.tarde))}</span>`
-      : (esSabado ? '<span class="muted italic">solo mañana</span>' : '<span class="muted">—</span>');
+      : (soloManana ? '<span class="muted italic">solo mañana</span>' : '<span class="muted">—</span>');
 
     // El título explica el gesto: sin él, que la celda sea editable no se ve.
     const editar = (turno) => `data-accion="editar-celda" data-mod="${mod.id}"
       data-iso="${iso}" data-turno="${turno}" title="Clic para elegir vendedor"`;
     const attrM = editable ? editar('manana') : '';
-    const attrT = editable && !esSabado ? editar('tarde') : '';
+    const attrT = editable && !soloManana ? editar('tarde') : '';
     const cls = editable ? 'cell' : 'cell ro';
 
     html += `<tr${trCls}>

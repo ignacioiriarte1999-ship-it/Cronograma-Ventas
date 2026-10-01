@@ -51,10 +51,17 @@ export async function revisar(mod, forzarTodo) {
     const firma = mod.firmarSemana(sem);
     if (!forzarTodo && mod.revisiones[sem.lunes] === firma) { salteadas++; continue; }
     revisadas++;
-    for (const p of mod.detectarProblemas(sem, si)) {
-      fixes.push({ mod, sem, semIdx: si, problema: p });
-    }
-    await mod.guardarRevision(sem.lunes, firma);
+
+    const problemas = mod.detectarProblemas(sem, si);
+    for (const p of problemas) fixes.push({ mod, sem, semIdx: si, problema: p });
+
+    // Sólo se da por revisada la semana que quedó limpia. Antes se firmaba
+    // siempre, así que una semana con una advertencia sin resolver se
+    // salteaba para siempre: el badge la seguía marcando y el corrector
+    // decía "sin problemas" sobre una semana que ya no volvía a mirar. Ésa
+    // era la contradicción de las semanas 25 y 26 de Laprida.
+    if (problemas.length === 0) await mod.guardarRevision(sem.lunes, firma);
+    else await mod.olvidarRevision(sem.lunes);
   }
 
   mostrarModal(fixes, revisadas, salteadas);
@@ -63,11 +70,21 @@ export async function revisar(mod, forzarTodo) {
 function mostrarModal(fixes, revisadas, salteadas) {
   pendientes = fixes.map((f) => ({ ...f, resuelto: false }));
 
-  document.getElementById('modal-fixes-summary').innerHTML =
-    `Se revisaron <b>${revisadas}</b> semana(s) (${salteadas} sin cambios desde la última revisión). ` +
-    (fixes.length === 0
-      ? '<span class="ok-txt">Sin problemas detectados.</span>'
-      : `Se detectaron <b>${fixes.length}</b> problema(s).`);
+  // El resumen sólo puede hablar de lo que se miró. Decir "sin problemas"
+  // cuando quedaron semanas salteadas es afirmar de más: esas semanas no se
+  // revisaron, que no es lo mismo que estar bien.
+  const alcance = salteadas === 0
+    ? `Se revisaron las <b>${revisadas}</b> semana(s).`
+    : `Se revisaron <b>${revisadas}</b> semana(s). Las otras <b>${salteadas}</b> ya estaban `
+      + 'revisadas y sin cambios desde entonces, así que se saltearon.';
+
+  const veredicto = fixes.length === 0
+    ? (salteadas === 0
+      ? '<span class="ok-txt">Sin problemas en todo el cronograma.</span>'
+      : '<span class="ok-txt">Sin problemas en las semanas revisadas.</span>')
+    : `Se detectaron <b>${fixes.length}</b> problema(s).`;
+
+  document.getElementById('modal-fixes-summary').innerHTML = `${alcance} ${veredicto}`;
 
   const conFix = fixes.filter((f) => f.problema.autoFix).length;
   document.getElementById('modal-fixes-acciones').style.display = conFix > 0 ? 'flex' : 'none';
