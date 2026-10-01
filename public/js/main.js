@@ -5,6 +5,7 @@ import { vigilarConexion } from './db.js';
 import {
   observarSesion, login, logout, getSession, esAdmin, traducirError,
   cambiarPassword, listarUsuarios, crearPadronFaltante, crearUsuario, listarVendedores,
+  faltantesDelPadron,
 } from './auth.js';
 import { MIN_PASS, passInicial, PADRON } from './config.js';
 import { esc, fromISO, formatShort, formatLargo, hoyISO } from './utils.js';
@@ -12,7 +13,10 @@ import { nom, local } from './alias.js';
 import { DEMO } from './db.js';
 import { getModulo, listaModulos } from './modules.js';
 import { HORIZONTE_MINIMO_DIAS, objetivoDeCobertura, diasRestantes } from './schedule.js';
-import { renderCronograma, renderMiHorario, elegirPeriodo, elegirVendedor, setPedidosPropios } from './render.js';
+import {
+  renderCronograma, renderMiHorario, elegirPeriodo, elegirVendedor, setPedidosPropios, irAHoy,
+  elegirVista, moverSemana,
+} from './render.js';
 import { traerFeriados, nuevosPara, turnosQuePisa, aniosOfrecidos } from './feriados-api.js';
 import {
   listarPedidos, contarPendientes, suscribirPedidos, crearPedido, cancelarPedido,
@@ -717,7 +721,7 @@ async function cargarUsuarios() {
   if (!cont) return;
   try {
     const usuarios = await listarUsuarios();
-    const faltantes = PADRON.filter((p) => !usuarios.some((u) => u.user === p.user));
+    const faltantes = faltantesDelPadron(usuarios);
 
     let html = '';
     if (faltantes.length > 0 && !DEMO) {
@@ -764,13 +768,23 @@ async function hacerCambioPassConfig() {
 }
 
 async function hacerCrearPadron(btn) {
-  if (!confirm('Se van a crear las cuentas faltantes con su contraseña inicial.\n\n¿Continuar?')) return;
+  // Se bloquea antes del confirm: si no, dos clics rápidos abren dos diálogos
+  // y el alta masiva corre dos veces.
+  if (btn.disabled) return;
   btn.disabled = true;
+  if (!confirm('Se van a crear las cuentas faltantes con su contraseña inicial.\n\n¿Continuar?')) {
+    btn.disabled = false;
+    return;
+  }
   try {
-    const { creados, omitidos, errores } = await crearPadronFaltante((user, estado) => {
+    const { creados, asociados, omitidos, errores } = await crearPadronFaltante((user, estado) => {
       btn.textContent = `${estado}: ${user}…`;
     });
     let resumen = `Usuarios creados: ${creados.length}\nYa existían: ${omitidos.length}`;
+    if (asociados.length) {
+      resumen += `\n\nCuentas que ya existían y se volvieron a asociar a su vendedor:\n`
+        + asociados.map((a) => `  ${a.user} → ${a.vendedor}`).join('\n');
+    }
     if (creados.length) {
       resumen += '\n\nContraseñas iniciales (cada uno debe cambiarla al entrar):\n'
         + creados.map((c) => `  ${c.user} → ${c.pass}`).join('\n');
@@ -827,6 +841,12 @@ document.addEventListener('click', (ev) => {
     case 'pass-gate-salir': logout(); break;
 
     case 'editar-celda': if (mod) abrirSelectorCelda(el, mod, iso, turno); break;
+    case 'ir-a-hoy': if (mod) irAHoy(mod); break;
+    case 'vista':
+      if (mod) { elegirVista(mod.id, el.dataset.vista); renderCronograma(mod); }
+      break;
+    case 'semana-prev': if (mod) moverSemana(mod, -1); break;
+    case 'semana-next': if (mod) moverSemana(mod, 1); break;
     case 'agregar-feriado': agregarFeriado(mod); break;
     case 'feriados-cargar':
       if (mod) hacerCargarFeriados(mod, $(`fer-anio-${mod.id}`).value);

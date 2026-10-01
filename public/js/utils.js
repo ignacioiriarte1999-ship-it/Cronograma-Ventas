@@ -32,10 +32,21 @@ export function formatLargo(d) {
   return `${DIAS_LARGOS[d.getDay()]}, ${d.getDate()} de ${MESES_LARGOS[d.getMonth()]}`;
 }
 
+// La empresa está en San Bernardo. Si alguien abre la app con el reloj del
+// equipo en otro huso —o viajando—, "hoy" tiene que seguir siendo el día de
+// acá, porque de eso dependen la semana actual y el turno resaltado.
+const ZONA = 'America/Argentina/Buenos_Aires';
+
 export function hoyISO() {
-  const h = new Date();
-  h.setHours(0, 0, 0, 0);
-  return toISO(h);
+  try {
+    // 'en-CA' formatea como AAAA-MM-DD, que es el mismo ISO que usa la app.
+    return new Intl.DateTimeFormat('en-CA', { timeZone: ZONA }).format(new Date());
+  } catch (e) {
+    // Un navegador sin esa base de husos: mejor el día local que ninguno.
+    const h = new Date();
+    h.setHours(0, 0, 0, 0);
+    return toISO(h);
+  }
 }
 
 /**
@@ -47,6 +58,21 @@ export function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => (
     { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
   ));
+}
+
+/**
+ * Forma canónica de un nombre de usuario, para poder compararlos.
+ *
+ * El padrón escribe `de_la_rosa` y la misma persona puede estar en Supabase
+ * como `delarosa`, `De La Rosa` o `delarosa@cronograma.com`. Comparar el texto
+ * crudo daba por faltantes a los quince que ya estaban dados de alta.
+ */
+export function normUser(v) {
+  return String(v ?? '')
+    .split('@')[0]
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')   // sin acentos
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');                          // sin _ , espacios ni guiones
 }
 
 /** Agrupa fechas ISO ordenadas en semanas que arrancan el lunes. */
