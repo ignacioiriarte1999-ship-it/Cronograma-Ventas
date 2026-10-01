@@ -410,8 +410,15 @@ export function crearModulo(config) {
         .upsert({ punto_venta: this.id, fecha: iso, motivo, medio_dia: medioDia },
           { onConflict: 'punto_venta,fecha' });
       if (error) { avisarError('No se pudo guardar el feriado.', error); return; }
-      // El día queda cerrado: se liberan los turnos que tuviera.
-      await sb.from('turnos').delete().match({ punto_venta: this.id, fecha: iso });
+
+      // Se liberan los turnos que el día tuviera. Un feriado cierra la jornada
+      // entera; un medio día sólo la tarde, así que borrar los dos le sacaría
+      // la mañana a alguien que sí la trabaja.
+      const baja = sb.from('turnos').delete().match(medioDia
+        ? { punto_venta: this.id, fecha: iso, turno: 'tarde' }
+        : { punto_venta: this.id, fecha: iso });
+      const { error: errTurnos } = await baja;
+      if (errTurnos) avisarError('No se pudieron liberar los turnos del día.', errTurnos);
     },
 
     async quitarFeriado(iso) {
