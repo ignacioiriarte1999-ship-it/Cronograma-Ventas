@@ -1171,3 +1171,6 @@ table.grid td.cell:not(.ro):hover .pill { border-color: rgba(29, 78, 216, 0.35);
 :root[data-tema="oscuro"] .role-tag       { background: #1f2c3f; color: #a9b6c9; }
 :root[data-tema="oscuro"] .role-tag.admin { background: rgba(248, 113, 113, 0.16); color: #fca5a5; }
 :root[data-tema="oscuro"] .role-tag.vend  { background: rgba(96, 165, 250, 0.16); color: #93c5fd; }
+
+/* Carga automática de feriados ------------------------------- */
+.feriado-auto { display: grid; grid-template-columns: 1fr auto; gap: 6px; }

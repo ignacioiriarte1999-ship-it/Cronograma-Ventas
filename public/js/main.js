@@ -28,6 +28,7 @@ import {
   renderCronograma, renderMiHorario, elegirPeriodo, elegirVendedor, setPedidosPropios, irAHoy,
   elegirVista, moverSemana,
 } from './render.js';
+import { traerFeriados, nuevosPara, turnosQuePisa, aniosOfrecidos } from './feriados-api.js';
 import {
   listarPedidos, contarPendientes, suscribirPedidos, crearPedido, cancelarPedido,
   aprobarPedido, rechazarPedido, revisarImpacto, describirTurno, estaInstalado,
@@ -218,8 +219,34 @@ async function hacerExtender(btn) {
   btn.disabled = false;
   btn.textContent = 'Extender hasta fin del año que viene';
   $('modal-config').classList.remove('open');
-  if (hechos.length) mostrarAvisoExtension(hechos);
-  else alert('No hubo nada que extender: ambos cronogramas ya llegan hasta ' + objetivo + '.');
+  if (!hechos.length) {
+    alert('No hubo nada que extender: ambos cronogramas ya llegan hasta ' + objetivo + '.');
+    return;
+  }
+  mostrarAvisoExtension(hechos);
+
+  // El tramo nuevo entra en un año que probablemente no tenga feriados
+  // cargados, y sin ellos la rotación queda mal desde el principio. Se
+  // consultan solos, pero siguen necesitando confirmación: cargarlos de una
+  // borraría turnos recién generados sin que nadie lo viera.
+  await ofrecerFeriadosDelAnioNuevo(objetivo);
+}
+
+/**
+ * Después de extender, ofrece los feriados del año al que se llegó.
+ *
+ * Va de a un punto de venta: los dos comparten las fechas pero no la tabla,
+ * y cada uno tiene que confirmarse por separado.
+ */
+async function ofrecerFeriadosDelAnioNuevo(objetivo) {
+  const anio = Number(objetivo.slice(0, 4));
+  for (const mod of listaModulos()) {
+    const { fuente, feriados } = await traerFeriados(anio);
+    const nuevos = nuevosPara(mod, feriados);
+    if (!nuevos.length) continue;
+    mostrarPrevioFeriados(mod, nuevos, fuente, `${anio}`);
+    return;   // uno por vez: dos modales encimados no se pueden responder
+  }
 }
 
 
@@ -1169,6 +1196,11 @@ document.addEventListener('click', (ev) => {
     case 'semana-prev': if (mod) moverSemana(mod, -1); break;
     case 'semana-next': if (mod) moverSemana(mod, 1); break;
     case 'agregar-feriado': agregarFeriado(mod); break;
+    case 'feriados-cargar':
+      if (mod) hacerCargarFeriados(mod, $(`fer-anio-${mod.id}`).value);
+      break;
+    case 'feriados-actualizar': if (mod) hacerActualizarFeriados(mod); break;
+    case 'feriados-confirmar': confirmarFeriados(); break;
     case 'quitar-feriado':
       if (confirm(`¿Quitar el feriado del ${formatShort(fromISO(iso))}?`)) mod.quitarFeriado(iso);
       break;
@@ -1189,6 +1221,92 @@ document.addEventListener('click', (ev) => {
     default: break;
   }
 });
+
+// ------------------------------------------------------------
+//  FERIADOS AUTOMÁTICOS
+// ------------------------------------------------------------
+// Nada se carga sin vista previa: un feriado borra los turnos de ese día, y
+// meter veinte de golpe sin que el admin los vea sería destruir trabajo a
+// ciegas.
+
+let feriadosPendientes = null;   // { mod, nuevos, fuente }
+
+async function hacerCargarFeriados(mod, anio) {
+  const { fuente, feriados } = await traerFeriados(anio);
+  mostrarPrevioFeriados(mod, nuevosPara(mod, feriados), fuente, `${anio}`);
+}
+
+async function hacerActualizarFeriados(mod) {
+  // Se repasan todos los años que toca el cronograma: un decreto de mitad de
+  // año puede agregar puentes en cualquiera de ellos.
+  const anios = aniosOfrecidos(mod);
+  const nuevos = [];
+  let fuente = 'api';
+  for (const a of anios) {
+    const r = await traerFeriados(a);
+    if (r.fuente === 'calculo') fuente = 'calculo';
+    nuevos.push(...nuevosPara(mod, r.feriados));
+  }
+  mostrarPrevioFeriados(mod, nuevos, fuente, anios.length > 1
+    ? `${anios[0]}–${anios[anios.length - 1]}` : `${anios[0]}`);
+}
+
+function mostrarPrevioFeriados(mod, nuevos, fuente, etiqueta) {
+  feriadosPendientes = { mod, nuevos, fuente };
+
+  $('modal-ia-titulo').textContent = `Feriados de ${etiqueta} — ${local(mod.id, mod.nombre)}`;
+
+  const aviso = fuente === 'calculo'
+    ? `<div class="warn-box">La consulta a ArgentinaDatos falló, así que esto sale del cálculo
+       propio de la app: están los inamovibles, Carnaval y Semana Santa, pero
+       <b>faltan los puentes turísticos y los traslados por decreto</b>. Probá
+       "Actualizar feriados" más tarde.</div>`
+    : '';
+
+  if (!nuevos.length) {
+    $('modal-ia-body').innerHTML = `${aviso}<div class="info-box">No hay feriados nuevos para cargar:
+      los que devuelve la fuente ya están en el panel, o caen fuera del cronograma.</div>`;
+    $('modal-ia').classList.add('open');
+    return;
+  }
+
+  const pisados = nuevos.map((f) => turnosQuePisa(mod, f.iso).length).reduce((a, b) => a + b, 0);
+
+  $('modal-ia-body').innerHTML = `
+    ${aviso}
+    <div class="info-box">${nuevos.length} feriado(s) nuevo(s). Se cargan sólo si confirmás.</div>
+    ${pisados ? `<div class="warn-box">Van a vaciar <b>${pisados}</b> turno(s) ya asignado(s),
+      que están marcados abajo. Después conviene pasar el corrector.</div>` : ''}
+    <div class="fix-list">
+      ${nuevos.map((f) => {
+        const pisa = turnosQuePisa(mod, f.iso);
+        return `<div class="fix-item">
+          <div class="regla">${esc(formatShort(fromISO(f.iso)))} · ${esc(f.tipo)}</div>
+          <div class="desc">${esc(f.motivo)}</div>
+          ${pisa.length ? `<div class="diff"><span class="before">borra ${pisa
+            .map((p) => `${p.turno === 'manana' ? 'mañana' : 'tarde'}: ${esc(nom(p.vendedor))}`)
+            .join(' · ')}</span></div>` : ''}
+        </div>`;
+      }).join('')}
+    </div>
+    <div class="btn-row mt-8">
+      <button class="btn-primary" data-accion="feriados-confirmar">Cargar los ${nuevos.length}</button>
+      <button class="btn-secondary" data-accion="cerrar-ia">Cancelar</button>
+    </div>`;
+
+  $('modal-ia').classList.add('open');
+}
+
+async function confirmarFeriados() {
+  if (!feriadosPendientes) return;
+  const { mod, nuevos } = feriadosPendientes;
+  feriadosPendientes = null;
+
+  for (const f of nuevos) await mod.agregarFeriado(f.iso, f.motivo);
+  $('modal-ia').classList.remove('open');
+  renderCronograma(mod);
+  alert(`${nuevos.length} feriado(s) cargado(s).`);
+}
 
 function agregarFeriado(mod) {
   const fecha = $(`fer-fecha-${mod.id}`).value;
