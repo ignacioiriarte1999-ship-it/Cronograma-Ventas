@@ -32,10 +32,21 @@ export function formatLargo(d) {
   return `${DIAS_LARGOS[d.getDay()]}, ${d.getDate()} de ${MESES_LARGOS[d.getMonth()]}`;
 }
 
+// La empresa está en San Bernardo. Si alguien abre la app con el reloj del
+// equipo en otro huso —o viajando—, "hoy" tiene que seguir siendo el día de
+// acá, porque de eso dependen la semana actual y el turno resaltado.
+const ZONA = 'America/Argentina/Buenos_Aires';
+
 export function hoyISO() {
-  const h = new Date();
-  h.setHours(0, 0, 0, 0);
-  return toISO(h);
+  try {
+    // 'en-CA' formatea como AAAA-MM-DD, que es el mismo ISO que usa la app.
+    return new Intl.DateTimeFormat('en-CA', { timeZone: ZONA }).format(new Date());
+  } catch (e) {
+    // Un navegador sin esa base de husos: mejor el día local que ninguno.
+    const h = new Date();
+    h.setHours(0, 0, 0, 0);
+    return toISO(h);
+  }
 }
 
 /**
